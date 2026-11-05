@@ -17,20 +17,25 @@ public struct MediaReadingSheet<Content: View>: View {
     @State private var offset: CGFloat = 0
     private let surface: Color
     private let heightBelowPlayer: CGFloat?
+    private let topEdge: CGFloat?
     private let close: (() -> Void)?
     private let content: Content
 
-    public init(surface: Color, heightBelowPlayer: CGFloat? = nil, close: (() -> Void)? = nil,
+    public init(surface: Color, heightBelowPlayer: CGFloat? = nil, topEdge: CGFloat? = nil,
+                close: (() -> Void)? = nil,
                 @ViewBuilder content: () -> Content) {
         self.surface = surface
         self.heightBelowPlayer = heightBelowPlayer
+        self.topEdge = topEdge
         self.close = close
         self.content = content()
     }
 
     public var body: some View {
         GeometryReader { geometry in
-            let height = min(heightBelowPlayer.flatMap { $0 > 0 ? $0 : nil } ?? geometry.size.height * 2 / 3,
+            let anchoredHeight = topEdge.map { geometry.frame(in: .global).maxY - $0 }
+            let requestedHeight = anchoredHeight ?? heightBelowPlayer
+            let height = min(requestedHeight.flatMap { $0 > 0 ? $0 : nil } ?? geometry.size.height * 2 / 3,
                              geometry.size.height)
             let insets = geometry.safeAreaInsets
             let cornerRadius: CGFloat = 24
