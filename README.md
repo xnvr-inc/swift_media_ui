@@ -100,6 +100,9 @@ The `MediaUI` module also exports `MediaVideoStage`, `PlaybackMultiviewLayout`,
 paging, and Apple TV focus and side panels. Compose these independently when a
 host needs a custom playback screen.
 
+On Apple TV, set `TVMediaPlaybackTile.onLongPress` to handle holding Select on a
+focused overview tile. A short press continues to call `onOpen`.
+
 ## Run the example
 
 Open [MediaUIDemo.xcodeproj](Examples/MediaUIDemo.xcodeproj) in Xcode. Use

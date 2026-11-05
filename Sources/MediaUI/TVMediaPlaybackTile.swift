@@ -12,6 +12,10 @@ import UIKit
     }
     public var onFocus: (() -> Void)?
     public var onOpen: (() -> Void)?
+    /// Handles a held Select press on a focused overview tile.
+    public var onLongPress: (() -> Void)? {
+        didSet { selectHold.isEnabled = isOverview && onLongPress != nil }
+    }
     public var isFocusEnabled = true
     public var isOverview = false {
         didSet {
@@ -19,12 +23,20 @@ import UIKit
             caption.isHidden = !isOverview || !showsCaption
             isAccessibilityElement = isOverview
             layer.cornerRadius = isOverview ? TVMediaLayout.Corner.card : 0
+            selectHold.isEnabled = isOverview && onLongPress != nil
         }
     }
     public var showsCaption = true { didSet { caption.isHidden = !isOverview || !showsCaption } }
     public var referenceSize: CGSize = .zero { didSet { setNeedsLayout() } }
     private let canvas = UIView()
     private let caption = UILabel()
+    private lazy var selectHold: UILongPressGestureRecognizer = {
+        let recognizer = UILongPressGestureRecognizer(target: self, action: #selector(holdSelect(_:)))
+        recognizer.allowedPressTypes = [NSNumber(value: UIPress.PressType.select.rawValue)]
+        recognizer.allowedTouchTypes = []
+        recognizer.isEnabled = false
+        return recognizer
+    }()
 
     public init(surface: UIView, selectedColor: UIColor, focusedColor: UIColor = .white,
                 captionFill: UIColor = .black.withAlphaComponent(0.65)) {
@@ -45,6 +57,7 @@ import UIKit
         caption.isUserInteractionEnabled = false
         addSubview(caption)
         addTarget(self, action: #selector(open), for: .primaryActionTriggered)
+        addGestureRecognizer(selectHold)
     }
 
     public required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
@@ -83,5 +96,10 @@ import UIKit
     }
 
     @objc private func open() { onOpen?() }
+
+    @objc private func holdSelect(_ recognizer: UILongPressGestureRecognizer) {
+        guard recognizer.state == .began, isFocused else { return }
+        onLongPress?()
+    }
 }
 #endif
