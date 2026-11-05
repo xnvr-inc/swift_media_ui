@@ -31,39 +31,44 @@ public struct MediaReadingSheet<Content: View>: View {
         GeometryReader { geometry in
             let height = min(heightBelowPlayer.flatMap { $0 > 0 ? $0 : nil } ?? geometry.size.height * 2 / 3,
                              geometry.size.height)
+            let insets = geometry.safeAreaInsets
             let shape = UnevenRoundedRectangle(topLeadingRadius: 24, topTrailingRadius: 24)
             ZStack(alignment: .bottom) {
-                Color.black.opacity(0.38 * max(0, 1 - offset / max(1, height)))
+                Color.clear
+                    .contentShape(Rectangle())
+                    .onTapGesture(perform: closeSheet)
                     .ignoresSafeArea()
                     .accessibilityHidden(true)
-                VStack(spacing: 0) {
-                    Capsule()
-                        .fill(.secondary.opacity(0.45))
-                        .frame(width: 36, height: 4)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 20)
-                        .accessibilityHidden(true)
-                    content
-                }
-                .frame(maxWidth: .infinity)
-                .frame(height: height, alignment: .top)
-                .clipShape(shape)
-                .background {
-                    shape.fill(surface).ignoresSafeArea(.container, edges: [.horizontal, .bottom])
-                }
-                .background {
-                    ReadingSheetPan(changed: { offset = max(0, $0) }, ended: { distance, velocity in
-                        if distance >= min(height / 4, 120) || (distance > 16 && velocity > 900) {
-                            closeSheet()
-                        } else {
-                            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) { offset = 0 }
-                        }
-                    })
-                }
-                .offset(y: offset)
-                .accessibilityAction(.escape, closeSheet)
-                .accessibilityAction(named: Text("닫기"), closeSheet)
+                content
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .safeAreaInset(edge: .top, spacing: 0) {
+                        Capsule()
+                            .fill(.secondary.opacity(0.45))
+                            .frame(width: 36, height: 4)
+                            .frame(height: 20)
+                            .accessibilityHidden(true)
+                            .allowsHitTesting(false)
+                    }
+                    .safeAreaPadding(EdgeInsets(top: 0, leading: insets.leading, bottom: 0, trailing: insets.trailing))
+                    .contentMargins(.bottom, insets.bottom, for: .scrollContent)
+                    .frame(height: height + insets.bottom)
+                    .background(surface, in: shape)
+                    .clipShape(shape)
+                    .contentShape(shape)
+                    .background {
+                        ReadingSheetPan(changed: { offset = max(0, $0) }, ended: { distance, velocity in
+                            if distance >= min(height / 4, 120) || (distance > 16 && velocity > 900) {
+                                closeSheet()
+                            } else {
+                                withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) { offset = 0 }
+                            }
+                        })
+                    }
+                    .offset(y: offset)
+                    .accessibilityAction(.escape, closeSheet)
+                    .accessibilityAction(named: Text("닫기"), closeSheet)
             }
+            .ignoresSafeArea(.container, edges: [.horizontal, .bottom])
         }
         .presentationBackground(.clear)
     }

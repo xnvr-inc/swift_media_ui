@@ -119,8 +119,11 @@ On iPhone and iPad, wrap reading content in `MediaReadingSheet` inside a
 SwiftUI `fullScreenCover` or a transparent UIKit `overFullScreen` presentation.
 The sheet attaches to the screen's bottom and sides and fills roughly two
 thirds of the available height by default. Pass `heightBelowPlayer` to place
-it immediately below a visible video. A downward drag at the top of the
-reader dismisses it. Apply pull to refresh to the browsing feed.
+it immediately below a visible video. The area outside the sheet is clear and
+tapping it dismisses the sheet, as does dragging down from the top of the
+reader. Scroll content can reach the sheet's edges, with an inset inside the
+scroll view for the bottom safe area. Place transparent header controls in a
+top `safeAreaInset` so the reader can scroll behind them.
 
 ## Run the example
 
