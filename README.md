@@ -4,6 +4,23 @@ Swift Media UI is a native Swift package for iPhone, iPad, Mac and Apple TV.
 It provides a source-driven player and reusable SwiftUI and UIKit components for
 media apps. It depends only on Apple SDKs.
 
+## Features
+
+- **Single video and multiview.** Open a playable URL, add videos from a source picker, and switch between a grid and an enlarged video.
+- **Independent sessions.** Select or close one video while the others keep their playback state.
+- **Playback and audio.** Play, pause and seek. Each video has its own volume and mute controls.
+- **Quality selection.** Use HLS automatic quality or expose the renditions your source supplies. Failed switches keep the previous item.
+- **Picture in Picture.** Use native PiP on supported iPhone, iPad and Mac configurations. iPhone and iPad can attempt a composite of the multiview.
+- **Reusable components.** Compose video stages, media cards, badges, discussion panels, portrait paging and Apple TV focus controls.
+
+## Screenshots
+
+The macOS example playing its bundled sample clips.
+
+| Single video | Two-video grid |
+| --- | --- |
+| ![Tidal Field playing in the macOS demo](Docs/Images/single-player-macos.png) | ![Tidal Field and Amber Drift playing side by side](Docs/Images/multiview-macos.png) |
+
 ## Install
 
 Add the package in Xcode using `https://github.com/xnvr-inc/swift_media_ui.git`
@@ -68,12 +85,30 @@ host needs a custom playback screen.
 
 ## Run the example
 
-On a Mac with Xcode installed, pass one or more local videos or playable URLs.
-With two or more arguments, **Add video** opens the source picker.
+On a Mac with Xcode installed, run the example with the bundled sample clips.
+
+```sh
+swift run MediaUIDemo
+```
+
+**Tidal Field** opens first. Choose **Add video** to open **Amber Drift**.
+Select Tidal Field to try its 360p and 180p renditions. The clips are synthetic
+sample media. You can also pass your own paths or playable URLs.
 
 ```sh
 swift run MediaUIDemo /path/to/first.mp4 /path/to/second.mp4
 swift test
+```
+
+## Codex skill
+
+Copy [skills/swift-media-ui](skills/swift-media-ui) into your Codex skills
+directory, then use `$swift-media-ui` when integrating the package. The skill
+covers source factories, platform focus, quality recovery and PiP verification.
+
+```sh
+mkdir -p "${CODEX_HOME:-$HOME/.codex}/skills"
+cp -R skills/swift-media-ui "${CODEX_HOME:-$HOME/.codex}/skills/"
 ```
 
 ## License

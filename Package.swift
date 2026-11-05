@@ -10,7 +10,12 @@ let package = Package(
     ],
     targets: [
         .target(name: "MediaUI"),
-        .executableTarget(name: "MediaUIDemo", dependencies: ["MediaUI"], path: "Examples/MediaUIDemo"),
+        .executableTarget(
+            name: "MediaUIDemo",
+            dependencies: ["MediaUI"],
+            path: "Examples/MediaUIDemo",
+            resources: [.copy("Samples")]
+        ),
         .testTarget(name: "MediaUITests", dependencies: ["MediaUI"]),
     ]
 )
