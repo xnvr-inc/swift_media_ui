@@ -212,7 +212,12 @@ public struct MediaPostLikeButton: View {
 
     public var body: some View {
         Button(action: action) {
-            MediaCommentActionLabel(isLiked ? "hand.thumbsup.fill" : "hand.thumbsup", count: count)
+            MediaCommentActionLabel(isLiked ? "hand.thumbsup.fill" : "hand.thumbsup", count: count, interactive: false)
+                #if os(iOS)
+                .frame(minWidth: MediaControlMetrics.touchTarget, minHeight: MediaControlMetrics.touchTarget,
+                       alignment: .leading)
+                .contentShape(Rectangle())
+                #endif
         }
         .accessibilityLabel(isLiked ? "게시글 좋아요 취소" : "게시글 좋아요")
         .accessibilityValue(count)
