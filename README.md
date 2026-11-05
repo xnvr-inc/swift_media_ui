@@ -123,7 +123,9 @@ it immediately below a visible video. The area outside the sheet is clear and
 tapping it dismisses the sheet, as does dragging down from the top of the
 reader. Scroll content can reach the sheet's edges, with an inset inside the
 scroll view for the bottom safe area. Place transparent header controls in a
-top `safeAreaInset` so the reader can scroll behind them.
+top `safeAreaInset` so the reader can scroll behind them. Use a surface
+distinct from the surrounding screen. A thin upper edge fades into the
+rounded corners.
 
 ## Run the example
 

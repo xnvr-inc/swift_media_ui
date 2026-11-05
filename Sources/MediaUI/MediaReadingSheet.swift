@@ -13,6 +13,7 @@ public enum MediaReadingSheetLayout {
 public struct MediaReadingSheet<Content: View>: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.displayScale) private var displayScale
     @State private var offset: CGFloat = 0
     private let surface: Color
     private let heightBelowPlayer: CGFloat?
@@ -32,7 +33,8 @@ public struct MediaReadingSheet<Content: View>: View {
             let height = min(heightBelowPlayer.flatMap { $0 > 0 ? $0 : nil } ?? geometry.size.height * 2 / 3,
                              geometry.size.height)
             let insets = geometry.safeAreaInsets
-            let shape = UnevenRoundedRectangle(topLeadingRadius: 24, topTrailingRadius: 24)
+            let cornerRadius: CGFloat = 24
+            let shape = UnevenRoundedRectangle(topLeadingRadius: cornerRadius, topTrailingRadius: cornerRadius)
             ZStack(alignment: .bottom) {
                 Color.clear
                     .contentShape(Rectangle())
@@ -54,6 +56,15 @@ public struct MediaReadingSheet<Content: View>: View {
                     .frame(height: height + insets.bottom)
                     .background(surface, in: shape)
                     .clipShape(shape)
+                    .overlay {
+                        shape.strokeBorder(Color.primary.opacity(0.12), lineWidth: 1 / displayScale)
+                            .mask(alignment: .top) {
+                                LinearGradient(colors: [.black, .clear], startPoint: .top, endPoint: .bottom)
+                                    .frame(height: cornerRadius)
+                            }
+                            .allowsHitTesting(false)
+                            .accessibilityHidden(true)
+                    }
                     .contentShape(shape)
                     .background {
                         ReadingSheetPan(changed: { offset = max(0, $0) }, ended: { distance, velocity in
