@@ -115,6 +115,13 @@ clearance for navigation. Keep the same player or session mounted as the dock
 moves. A slow drag settles at the nearest corner. A quick flick can reach the
 corner in its direction even after a short drag.
 
+On iPhone and iPad, wrap reading content in `MediaReadingSheet` inside a
+SwiftUI `fullScreenCover` or a transparent UIKit `overFullScreen` presentation.
+The sheet attaches to the screen's bottom and sides and fills roughly two
+thirds of the available height by default. Pass `heightBelowPlayer` to place
+it immediately below a visible video. A downward drag at the top of the
+reader dismisses it. Apply pull to refresh to the browsing feed.
+
 ## Run the example
 
 Open [MediaUIDemo.xcodeproj](Examples/MediaUIDemo.xcodeproj) in Xcode. Use
