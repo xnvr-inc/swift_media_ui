@@ -13,13 +13,30 @@ media apps. It depends only on Apple SDKs.
 - **Picture in Picture.** Use native PiP on supported iPhone, iPad and Mac configurations. iPhone and iPad can attempt a composite of the multiview.
 - **Reusable components.** Compose video stages, media cards, badges, discussion panels, portrait paging and Apple TV focus controls.
 
-## Screenshots
+## Demo app
 
-The macOS example playing its bundled sample clips.
+The example uses the production media card, badge, navigation and discussion
+patterns with bundled sample videos, channels, posts and chat. It runs offline.
 
-| Single video | Two-video grid |
-| --- | --- |
-| ![Tidal Field playing in the macOS demo](Docs/Images/single-player-macos.png) | ![Tidal Field and Amber Drift playing side by side](Docs/Images/multiview-macos.png) |
+- **Video** has Home, Subscriptions, Shorts and MY, with search, channel pages,
+  posts, saved videos and watch history.
+- **Live Platform** has Home, MY, LIVE and Categories, with sample streams,
+  replays, clips, channel pages and chat.
+- Open **Settings** to switch experiences. Both use the same `MediaPlayer`
+  for single playback, multiview, quality and audio controls. Collapse the
+  player to keep watching while you browse.
+
+### Screenshots
+
+Captured from the iPhone, iPad and Apple TV simulators and from the native Mac
+app. Each row shows both experiences.
+
+| Platform | Video | Live Platform |
+| --- | --- | --- |
+| iPhone | ![Video home on iPhone](Docs/Images/iphone-video.png) | ![Live home on iPhone](Docs/Images/iphone-live.png) |
+| iPad | ![Video home on iPad](Docs/Images/ipad-video.png) | ![Live multiview on iPad](Docs/Images/ipad-live.png) |
+| Mac | ![Video home on Mac](Docs/Images/macos-video.png) | ![Live home on Mac](Docs/Images/macos-live.png) |
+| Apple TV | ![Video home on Apple TV](Docs/Images/tvos-video.png) | ![Live multiview on Apple TV](Docs/Images/tvos-live.png) |
 
 ## Install
 
@@ -85,20 +102,21 @@ host needs a custom playback screen.
 
 ## Run the example
 
-On a Mac with Xcode installed, run the example with the bundled sample clips.
+Open [MediaUIDemo.xcodeproj](Examples/MediaUIDemo.xcodeproj) in Xcode. Use
+the `MediaUIDemo-iOS` scheme for iPhone and iPad, `MediaUIDemo-tvOS` for
+Apple TV, and `MediaUIDemo-macOS` for Mac. Select a simulator or **My Mac**
+and run. The project uses this checkout's MediaUI package and bundled clips.
+
+The Mac example can also run through SwiftPM.
 
 ```sh
 swift run MediaUIDemo
-```
-
-**Tidal Field** opens first. Choose **Add video** to open **Amber Drift**.
-Select Tidal Field to try its 360p and 180p renditions. The clips are synthetic
-sample media. You can also pass your own paths or playable URLs.
-
-```sh
-swift run MediaUIDemo /path/to/first.mp4 /path/to/second.mp4
 swift test
 ```
+
+Add `--showcase-video` or `--showcase-live` to select the starting
+experience, and `--showcase-watch` to open a sample multiview session.
+To regenerate the Xcode project, run `xcodegen generate` from `Examples/`.
 
 ## Codex skill
 

@@ -6,6 +6,7 @@ import SwiftUI
 public struct MediaPlayer: View {
     @State private var controller: MediaPlayerController
     @State private var isPicking = false
+    private let showsControls: Bool
     private let availableSources: [MediaPlaybackSource]
     private let onRestorePictureInPicture: (() -> Void)?
     #if os(tvOS)
@@ -17,10 +18,12 @@ public struct MediaPlayer: View {
     public init(
         controller: MediaPlayerController,
         availableSources: [MediaPlaybackSource] = [],
+        showsControls: Bool = true,
         onRestorePictureInPicture: (() -> Void)? = nil
     ) {
         _controller = State(initialValue: controller)
         self.availableSources = availableSources
+        self.showsControls = showsControls
         self.onRestorePictureInPicture = onRestorePictureInPicture
     }
 
@@ -35,19 +38,21 @@ public struct MediaPlayer: View {
     public var body: some View {
         VStack(spacing: 0) {
             stage
-            ScrollView(.horizontal) {
-                HStack {
-                    if !availableSources.isEmpty {
-                        button("Add video", icon: "plus") { isPicking = true }
+            if showsControls {
+                ScrollView(.horizontal) {
+                    HStack {
+                        if !availableSources.isEmpty {
+                            button("Add video", icon: "plus") { isPicking = true }
+                        }
+                        if let session = controller.selected {
+                            controls(for: session)
+                        }
                     }
-                    if let session = controller.selected {
-                        controls(for: session)
-                    }
+                    .padding(.horizontal)
+                    .padding(.vertical, 8)
                 }
-                .padding(.horizontal)
-                .padding(.vertical, 8)
+                .scrollIndicators(.hidden)
             }
-            .scrollIndicators(.hidden)
         }
         .onAppear {
             controller.resume()
@@ -132,12 +137,16 @@ public struct MediaPlayer: View {
                 pictureInPicture.register(layer, for: session.id)
             }
             #else
+            #if os(macOS)
+            MediaPlayerVideoSurface(player: session.player, showsControls: showsControls)
+            #else
             MediaPlayerVideoSurface(player: session.player)
+            #endif
             #endif
             if session.isLoading && session.player.currentItem == nil {
                 ProgressView().tint(.white)
             }
-            if controller.sessions.count > 1 {
+            if showsControls && controller.sessions.count > 1 {
                 Button {
                     controller.select(session.id)
                 } label: {
@@ -249,16 +258,18 @@ public struct MediaPlayer: View {
 #if os(macOS)
 @MainActor private struct MediaPlayerVideoSurface: NSViewRepresentable {
     let player: AVPlayer
+    let showsControls: Bool
 
     func makeNSView(context: Context) -> AVPlayerView {
         let view = AVPlayerView()
         view.player = player
-        view.controlsStyle = .inline
+        view.controlsStyle = showsControls ? .inline : .none
         view.allowsPictureInPicturePlayback = true
         return view
     }
 
     func updateNSView(_ view: AVPlayerView, context: Context) {
+        view.controlsStyle = showsControls ? .inline : .none
         if view.player !== player { view.player = player }
     }
 }

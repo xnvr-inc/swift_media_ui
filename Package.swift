@@ -14,7 +14,7 @@ let package = Package(
             name: "MediaUIDemo",
             dependencies: ["MediaUI"],
             path: "Examples/MediaUIDemo",
-            resources: [.copy("Samples")]
+            resources: [.copy("Samples"), .process("Brand.xcassets")]
         ),
         .testTarget(name: "MediaUITests", dependencies: ["MediaUI"]),
     ]

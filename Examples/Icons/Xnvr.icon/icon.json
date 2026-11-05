@@ -1,0 +1,61 @@
+{
+  "features" : [
+    "refractivity",
+    "specular-location"
+  ],
+  "fill-specializations" : [
+    {
+      "value" : "system-light"
+    },
+    {
+      "appearance" : "dark",
+      "value" : "system-dark"
+    }
+  ],
+  "groups" : [
+    {
+      "blur-material" : 0.38,
+      "layers" : [
+        {
+          "glass" : true,
+          "image-name-specializations" : [
+            {
+              "value" : "xnvr-light.svg"
+            },
+            {
+              "appearance" : "dark",
+              "value" : "xnvr-dark.svg"
+            }
+          ],
+          "name" : "xnvr",
+          "position" : {
+            "scale" : 0.84,
+            "translation-in-points" : [
+              0,
+              0
+            ]
+          }
+        }
+      ],
+      "lighting" : "combined",
+      "name" : "Original xnvr lettering",
+      "refractivity" : {
+        "depth" : 0.6060546875,
+        "enabled" : true,
+        "strength" : 0.5603515625
+      },
+      "shadow" : {
+        "kind" : "neutral",
+        "opacity" : 0.73
+      },
+      "specular" : "inside",
+      "translucency" : {
+        "enabled" : true,
+        "value" : 0.36
+      }
+    }
+  ],
+  "supported-platforms" : {
+    "squares" : "shared"
+  }
+}
