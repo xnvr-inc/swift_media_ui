@@ -111,7 +111,8 @@ Wrap a compact `MediaPlayer` or a set of `MediaPlaybackTiles` in
 `MediaMiniPlayerDock` for in-app playback. The dock takes a corner binding and
 a `MediaMiniPlayerLayout`. The host supplies its safe area and any bottom
 clearance for navigation. Keep the same player or session mounted as the dock
-moves.
+moves. A slow drag settles at the nearest corner. A quick flick can reach the
+corner in its direction even after a short drag.
 
 ## Run the example
 

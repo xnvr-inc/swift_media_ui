@@ -80,14 +80,15 @@ public struct MediaMiniPlayerDock<Content: View>: View {
                         onDismiss()
                     }
                 } else {
-                    settle(at: layout.closestCorner(from: corner, offset: drag.translation))
+                    settle(at: layout.snapCorner(from: corner, offset: drag.translation,
+                                                 predicted: drag.predictedEndTranslation))
                 }
             }
     }
 
     private func settle(at target: MediaMiniPlayerCorner) {
         if target != corner { UISelectionFeedbackGenerator().selectionChanged() }
-        withAnimation(motionReduced ? nil : .smooth(duration: 0.28)) {
+        withAnimation(motionReduced ? nil : .smooth(duration: 0.46)) {
             corner = target
             offset = .zero
         }

@@ -32,6 +32,19 @@ final class MediaMiniPlayerLayoutTests: XCTestCase {
         XCTAssertEqual(narrow.closestCorner(from: .bottomRight, offset: CGSize(width: -300, height: -300)), .bottomLeft)
     }
 
+    func testShortFlickMovesTowardTheReleaseDirection() {
+        let upward = CGSize(width: -4, height: -64)
+        XCTAssertEqual(layout.snapCorner(from: .bottomRight, offset: upward,
+                                         predicted: CGSize(width: -6, height: -90)), .bottomRight)
+        XCTAssertEqual(layout.snapCorner(from: .bottomRight, offset: upward,
+                                         predicted: CGSize(width: -46, height: -196)), .topRight)
+        let downward = CGSize(width: 8, height: 52)
+        XCTAssertEqual(layout.snapCorner(from: .topLeft, offset: downward,
+                                         predicted: CGSize(width: 129, height: 322)), .bottomLeft)
+        XCTAssertEqual(layout.snapCorner(from: .topLeft, offset: downward,
+                                         predicted: CGSize(width: 176, height: 322)), .bottomRight)
+    }
+
     func testRightwardDragsFromTheLeftDockMoveThePlayer() {
         let rightward = CGSize(width: 100, height: 3)
         XCTAssertFalse(layout.shouldDismiss(from: .bottomLeft, offset: rightward, predicted: rightward))

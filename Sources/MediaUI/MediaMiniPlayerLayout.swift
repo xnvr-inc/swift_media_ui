@@ -48,6 +48,20 @@ public struct MediaMiniPlayerLayout {
         }
     }
 
+    func snapCorner(from corner: MediaMiniPlayerCorner, offset: CGSize, predicted: CGSize) -> MediaMiniPlayerCorner {
+        let momentumX = predicted.width - offset.width
+        let momentumY = predicted.height - offset.height
+        // Ignore small projections and motion across the main flick axis.
+        let minimumMomentum = max(100, max(abs(momentumX), abs(momentumY)) / 2)
+        func landingOffset(_ offset: CGFloat, momentum: CGFloat, extent: CGFloat) -> CGFloat {
+            guard abs(momentum) >= minimumMomentum else { return offset }
+            return momentum > 0 ? extent : -extent
+        }
+        let landing = CGSize(width: landingOffset(offset.width, momentum: momentumX, extent: bounds.width),
+                             height: landingOffset(offset.height, momentum: momentumY, extent: bounds.height))
+        return closestCorner(from: corner, offset: landing)
+    }
+
     func shouldDismiss(from corner: MediaMiniPlayerCorner, offset: CGSize, predicted: CGSize) -> Bool {
         corner.isRight && offset.width > abs(offset.height) * 1.5
             && (offset.width >= 90 || (offset.width >= 24 && predicted.width >= 160))
