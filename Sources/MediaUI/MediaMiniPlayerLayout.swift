@@ -1,4 +1,4 @@
-import Foundation
+import CoreGraphics
 
 public enum MediaMiniPlayerCorner: String, CaseIterable {
     case topLeft, topRight, bottomLeft, bottomRight
