@@ -14,10 +14,12 @@ Read the [package README](https://github.com/xnvr-inc/swift_media_ui) and inspec
 - Use stable content IDs when URLs expire or change. A source factory receives the chosen quality or `nil` for automatic and must return a fresh `AVPlayerItem`. Expose only available qualities. Supply refreshed URLs or prepared assets through the factory.
 - Keep accounts, discovery, service APIs, URL extraction, and custom transport in the host. Use the public layout, tile and control components with an existing playback engine when it cannot vend `AVPlayerItem`s. Preserve service-specific behavior when changing an existing integration.
 - Put generally reusable controls, session behavior, layouts, and platform handling in MediaUI. Keep product branding, presentation and source resolution with the consuming app.
+- Use `MediaVolumePresets` for a volume row inside a list or form. Supply the host's gain callback.
+- Custom iOS players can feed AVPlayers or decoded frames into `MediaMultiviewPictureInPicture`. Pass every source with a stable ID and keep its canvas mounted inline while requested.
 
 ## Verify changes
 
 - Exercise add, duplicate selection, close and featured layout with at least two media sources. Check that moving or closing one tile preserves the other session and its volume. Exercise a failed quality selection and recovery with a valid source.
 - Check keyboard and remote focus on affected platforms. Run `swift test` on macOS, then build the package and test the affected host destinations. Build success and simulator checks are separate from device playback verification.
-- On iPhone and iPad, confirm host background playback settings and check PiP entry, return and single-video fallback on a supported device. Report which PiP modes were exercised. Keep the source view mounted while PiP runs.
+- On iPhone and iPad, confirm host background playback settings and check PiP entry and return in both single-video and multiview modes. Check that a delayed source keeps its tile and appears when ready. Report which PiP modes were exercised. Keep the source view mounted while PiP runs.
 - Use bundled sample clips or authorized media for public examples and screenshots.

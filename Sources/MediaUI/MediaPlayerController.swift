@@ -31,6 +31,11 @@ public final class MediaPlayerController {
         selectedID = id
     }
 
+    /// Sets every current source to the same gain in the range 0...1.
+    public func setAllVolumes(_ volume: Float) {
+        for session in sessions { session.setVolume(volume) }
+    }
+
     public func feature(_ id: String?) {
         if let id {
             guard sourceIDs.contains(id) else { return }

@@ -13,6 +13,7 @@ public struct MediaPlayer: View {
     @FocusState private var focusedTile: String?
     #elseif os(iOS)
     @StateObject private var pictureInPicture = MediaPlayerPictureInPicture()
+    @StateObject private var multiviewPictureInPicture = MediaMultiviewPictureInPicture()
     #endif
 
     public init(
@@ -57,8 +58,7 @@ public struct MediaPlayer: View {
         .onAppear {
             controller.resume()
             #if os(iOS)
-            pictureInPicture.updateSessions(controller.sessions)
-            pictureInPicture.select(controller.selectedID)
+            synchronizePictureInPicture()
             #endif
         }
         .onDisappear { controller.suspend() }
@@ -84,15 +84,15 @@ public struct MediaPlayer: View {
         }
         #if os(iOS)
         .onChange(of: controller.sourceIDs) {
-            pictureInPicture.updateSessions(controller.sessions)
+            synchronizePictureInPicture()
         }
-        .onChange(of: controller.selectedID) {
-            pictureInPicture.select(controller.selectedID)
+        .onChange(of: controller.featuredID) {
+            synchronizePictureInPicture()
         }
-        .onChange(of: controller.featuredID, initial: true) {
-            pictureInPicture.featuredID = controller.featuredID
+        .onDisappear {
+            pictureInPicture.stop()
+            multiviewPictureInPicture.stop()
         }
-        .onDisappear { pictureInPicture.stop() }
         #endif
     }
 
@@ -113,9 +113,9 @@ public struct MediaPlayer: View {
                     }
                 }
                 #if os(iOS)
-                if pictureInPicture.isPresentingComposite || pictureInPicture.isUsingComposite {
-                    MediaPiPCompositeSurface(canvas: pictureInPicture.canvas)
-                        .opacity(pictureInPicture.isPresentingComposite ? 1 : 0.01)
+                if multiviewPictureInPicture.presentsInlineSource || multiviewPictureInPicture.isActive {
+                    MediaPiPCompositeSurface(canvas: multiviewPictureInPicture.canvas)
+                        .opacity(multiviewPictureInPicture.isActive ? 0.01 : 1)
                         .allowsHitTesting(false)
                         .accessibilityHidden(true)
                 }
@@ -209,6 +209,13 @@ public struct MediaPlayer: View {
                     else { Text("\(percent)%") }
                 }
             }
+            if controller.sessions.count > 1 {
+                Section("All videos") {
+                    ForEach([10, 30, 50, 70, 100], id: \.self) { percent in
+                        Button("\(percent)%") { controller.setAllVolumes(Float(percent) / 100) }
+                    }
+                }
+            }
         } label: {
             Label("Video volume \(Int((session.volume * 100).rounded()))%", systemImage: "speaker.wave.2.circle")
                 .labelStyle(.iconOnly)
@@ -235,7 +242,15 @@ public struct MediaPlayer: View {
             .disabled(session.isLoading)
         }
         #if os(iOS)
-        if pictureInPicture.isAvailable || pictureInPicture.isActive {
+        if controller.sessions.count > 1 || multiviewPictureInPicture.isActive {
+            let active = multiviewPictureInPicture.isActive
+            button(active ? "Close Picture in Picture" : "Picture in Picture",
+                   icon: active ? "pip.exit" : "pip.enter") {
+                multiviewPictureInPicture.onRestore = onRestorePictureInPicture
+                multiviewPictureInPicture.toggle()
+            }
+            .disabled(!multiviewPictureInPicture.canToggle)
+        } else if pictureInPicture.isAvailable || pictureInPicture.isActive {
             button(pictureInPicture.isActive ? "Close Picture in Picture" : "Picture in Picture",
                    icon: pictureInPicture.isActive ? "pip.exit" : "pip.enter") {
                 pictureInPicture.toggle(restore: onRestorePictureInPicture)
@@ -245,6 +260,18 @@ public struct MediaPlayer: View {
         #endif
         button("Close video", icon: "xmark") { controller.close(session.id) }
     }
+
+    #if os(iOS)
+    private func synchronizePictureInPicture() {
+        pictureInPicture.updateSourceIDs(controller.sourceIDs)
+        let sources = controller.sessions.map { session in
+            session.player.audiovisualBackgroundPlaybackPolicy = .continuesIfPossible
+            return MediaPiPSource(id: session.id, player: session.player,
+                isPlaying: { session.wantsPlayback }, setPlaying: { session.setPlaying($0) })
+        }
+        multiviewPictureInPicture.synchronize(sources: sources, featuredID: controller.featuredID)
+    }
+    #endif
 
     private func button(_ title: String, icon: String, action: @escaping () -> Void) -> some View {
         #if os(tvOS)

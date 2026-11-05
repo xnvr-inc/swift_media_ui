@@ -41,6 +41,19 @@ final class MediaPlayerTests: XCTestCase {
     }
 
     @MainActor
+    func testVolumePresetAppliesToEveryPlayerAndPreservesMute() throws {
+        let controller = MediaPlayerController(sources: [stub("first"), stub("second")])
+        let second = try XCTUnwrap(controller.sessions.last)
+        second.toggleMute()
+        controller.setAllVolumes(0.5)
+        XCTAssertEqual(controller.sessions.map(\.player.volume), [0.5, 0.5])
+        XCTAssertTrue(second.player.isMuted)
+        controller.select("second")
+        XCTAssertEqual(second.player.volume, 0.5)
+        controller.closeAll()
+    }
+
+    @MainActor
     func testClosingDuringSourceResolutionCancelsLoad() async throws {
         let requested = expectation(description: "Started resolving")
         let cancelled = expectation(description: "Cancelled resolver")

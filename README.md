@@ -8,9 +8,9 @@ media apps. It depends only on Apple SDKs.
 
 - **Single video and multiview.** Open a playable URL, add videos from a source picker, and switch between a grid and an enlarged video.
 - **Independent sessions.** Select or close one video while the others keep their playback state.
-- **Playback and audio.** Play, pause and seek. Each video has its own volume and mute controls.
+- **Playback and audio.** Play, pause and seek. Adjust each video's volume and mute, or apply a volume preset to all open videos.
 - **Quality selection.** Use HLS automatic quality or expose the renditions your source supplies. Failed switches keep the previous item.
-- **Picture in Picture.** Use native PiP on supported iPhone, iPad and Mac configurations. iPhone and iPad can attempt a composite of the multiview.
+- **Picture in Picture.** Use native PiP on supported iPhone, iPad and Mac configurations. iPhone and iPad compose the multiview into a single PiP window.
 - **Reusable components.** Compose video stages, media cards, badges, discussion panels, portrait paging and Apple TV focus controls.
 
 ## Demo app
@@ -52,7 +52,8 @@ MediaPlayer(url: videoURL)
 
 Pass an initial source and a list of available sources to enable the built-in
 picker. Adding, closing, selecting and enlarging a video preserve the remaining
-videos' sessions. Each video has its own volume and mute settings.
+videos' sessions. Each video has its own volume and mute settings. The volume
+menu has an **All videos** section during multiview.
 
 ```swift
 let first = MediaPlaybackSource(url: firstURL, title: "First video")
@@ -83,11 +84,11 @@ let source = MediaPlaybackSource(id: "episode-1", title: "Episode 1", qualities:
 
 ## Picture in Picture
 
-On iPhone and iPad, the PiP button is available when AVKit reports that the
-selected video can enter PiP. With multiple videos, the player attempts a
-composite using decoded frames and falls back to the selected video if the
-composite cannot start. The Mac uses the PiP button in the native AVKit video
-controls. Apple TV uses its remote-focus controls for in-app playback.
+On iPhone and iPad, a single video uses its AVPlayer layer for PiP. Multiview
+uses a composite of decoded frames. A loading source keeps its place in the
+grid and fills in when its first frame arrives. A source that stops supplying
+frames keeps its latest frame. The Mac uses the PiP button in the native AVKit
+video controls. Apple TV uses its remote-focus controls for in-app playback.
 
 An iOS host enables **Audio, AirPlay, and Picture in Picture** in Background
 Modes and configures its audio session for playback. Keep the player mounted
@@ -96,9 +97,11 @@ while PiP runs. A host can supply a callback to reveal its player on return.
 ## Components
 
 The `MediaUI` module also exports `MediaVideoStage`, `PlaybackMultiviewLayout`,
-`MediaPlaybackTiles`, video cards and badges, discussion views, portrait
-paging, and Apple TV focus and side panels. Compose these independently when a
-host needs a custom playback screen.
+`MediaPlaybackTiles`, `MediaVolumePresets`, video cards and badges, discussion
+views, portrait paging, and Apple TV focus and side panels. Custom iPhone and
+iPad players can supply AVPlayers or decoded frames through `MediaPiPSource`
+and mount the `MediaMultiviewPictureInPicture` canvas inline. The host owns
+its source resolution, audio mix and scene policy.
 
 ## Run the example
 

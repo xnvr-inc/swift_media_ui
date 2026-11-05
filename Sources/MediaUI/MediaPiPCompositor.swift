@@ -24,7 +24,24 @@ public actor MediaPiPCompositor {
   public init() {}
 
   public func render(_ frames: [MediaPiPFrame], featuredIndex: Int?) -> CMSampleBuffer? {
-    guard !frames.isEmpty else { return nil }
+    render(frames.map(Optional.some), aspectRatios: [], featuredIndex: featuredIndex)
+  }
+
+  func render(
+    _ frames: [MediaPiPFrame?], aspectRatios: [CGFloat?], featuredIndex: Int?
+  ) -> CMSampleBuffer? {
+    let images = frames.map { frame in
+      frame.map { CIImage(cvPixelBuffer: $0.buffer).transformed(by: $0.transform) }
+    }
+    guard images.contains(where: { $0 != nil }),
+      images.compactMap({ $0 }).allSatisfy({ !$0.extent.isEmpty && !$0.extent.isInfinite })
+    else { return nil }
+    let aspects = images.enumerated().map { index, image in
+      if let size = image?.extent.size { return size.width / size.height }
+      return aspectRatios.indices.contains(index)
+        ? aspectRatios[index] ?? MediaCardMetrics.landscapeAspect
+        : MediaCardMetrics.landscapeAspect
+    }
     if pool == nil {
       let attributes: [CFString: Any] = [
         kCVPixelBufferPixelFormatTypeKey: kCVPixelFormatType_32BGRA,
@@ -40,15 +57,14 @@ public actor MediaPiPCompositor {
     let limits = [kCVPixelBufferPoolAllocationThresholdKey: 3] as CFDictionary
     guard CVPixelBufferPoolCreatePixelBufferWithAuxAttributes(nil, pool, limits, &buffer)
       == kCVReturnSuccess, let buffer else { return nil }
-    let images = frames.map { CIImage(cvPixelBuffer: $0.buffer).transformed(by: $0.transform) }
-    guard images.allSatisfy({ !$0.extent.isEmpty && !$0.extent.isInfinite }) else { return nil }
     let layout = PlaybackMultiviewLayout(
       count: images.count, size: Self.size, controlsHeight: 0, spacing: 2,
-      featuredIndex: featuredIndex, aspectRatios: images.map { $0.extent.width / $0.extent.height })
+      featuredIndex: featuredIndex, aspectRatios: aspects)
     guard layout.frames.count == images.count, layout.frames.allSatisfy({ !$0.isEmpty }) else { return nil }
     let bounds = CGRect(origin: .zero, size: Self.size)
     var image = CIImage(color: .black).cropped(to: bounds)
-    for (index, source) in images.enumerated() {
+    for (index, slotImage) in images.enumerated() {
+      guard let source = slotImage else { continue }
       let slot = layout.frames[index]
       let fitted = AVMakeRect(aspectRatio: source.extent.size, insideRect: slot)
       let scale = fitted.width / source.extent.width
