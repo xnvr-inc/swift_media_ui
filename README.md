@@ -12,6 +12,7 @@ media apps. It depends only on Apple SDKs.
 - **Quality selection.** Use HLS automatic quality or expose the renditions your source supplies. Failed switches keep the previous item.
 - **Picture in Picture.** Use native PiP on supported iPhone, iPad and Mac configurations. iPhone and iPad compose the multiview into a single PiP window.
 - **Reusable components.** Compose video stages, media cards, badges, discussion panels, portrait paging and Apple TV focus controls.
+- **Floating mini-player.** On iPhone and iPad, drag one or more video tiles together and snap them to any corner of the safe viewport.
 
 ## Demo app
 
@@ -105,6 +106,12 @@ its source resolution, audio mix and scene policy.
 
 On Apple TV, set `TVMediaPlaybackTile.onLongPress` to handle holding Select on a
 focused overview tile. A short press continues to call `onOpen`.
+
+Wrap a compact `MediaPlayer` or a set of `MediaPlaybackTiles` in
+`MediaMiniPlayerDock` for in-app playback. The dock takes a corner binding and
+a `MediaMiniPlayerLayout`. The host supplies its safe area and any bottom
+clearance for navigation. Keep the same player or session mounted as the dock
+moves.
 
 ## Run the example
 
