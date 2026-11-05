@@ -88,7 +88,7 @@ public struct MediaMiniPlayerDock<Content: View>: View {
 
     private func settle(at target: MediaMiniPlayerCorner) {
         if target != corner { UISelectionFeedbackGenerator().selectionChanged() }
-        withAnimation(motionReduced ? nil : .smooth(duration: 0.46)) {
+        withAnimation(motionReduced ? nil : .easeOut(duration: 0.56)) {
             corner = target
             offset = .zero
         }

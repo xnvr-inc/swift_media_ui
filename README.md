@@ -113,7 +113,8 @@ Wrap a compact `MediaPlayer` or a set of `MediaPlaybackTiles` in
 a `MediaMiniPlayerLayout`. The host supplies its safe area and any bottom
 clearance for navigation. Keep the same player or session mounted as the dock
 moves. A slow drag settles at the nearest corner. A quick flick can reach the
-corner in its direction even after a short drag.
+corner in its direction even after a short drag. After release, the player
+decelerates into its corner. Reduce Motion places it directly at the corner.
 
 On iPhone and iPad, wrap reading content in `MediaReadingSheet` inside a
 SwiftUI `fullScreenCover` or a transparent UIKit `overFullScreen` presentation.
