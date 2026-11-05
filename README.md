@@ -115,6 +115,8 @@ clearance for navigation. Keep the same player or session mounted as the dock
 moves. A slow drag settles at the nearest corner. A quick flick can reach the
 corner in its direction even after a short drag. After release, the player
 decelerates into its corner. Reduce Motion places it directly at the corner.
+Use `MediaMiniPlayerMotion.minimizeDuration` (0.27 seconds) for the host's
+transition from the expanded player into the mini-player.
 
 On iPhone and iPad, wrap reading content in `MediaReadingSheet` inside a
 SwiftUI `fullScreenCover` or a transparent UIKit `overFullScreen` presentation.
