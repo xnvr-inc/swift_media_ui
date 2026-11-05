@@ -62,7 +62,9 @@ public struct MediaMiniPlayerDock<Content: View>: View {
     }
 
     private var motionReduced: Bool { reduceMotion || reducesMotion }
-    private var snapAnimation: Animation? { motionReduced ? nil : .easeOut(duration: 0.56) }
+    private var snapAnimation: Animation? {
+        motionReduced ? nil : .timingCurve(0.16, 0.32, 0.80, 1, duration: 0.48)
+    }
 
     private var movement: some Gesture {
         DragGesture(minimumDistance: 5, coordinateSpace: .global)
