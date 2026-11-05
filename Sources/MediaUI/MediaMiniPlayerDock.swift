@@ -52,6 +52,7 @@ public struct MediaMiniPlayerDock<Content: View>: View {
             .accessibilityAction(named: Text(moveActionTitle), moveToNextCorner)
             .opacity(isDismissing ? 0 : 1)
             .position(x: frame.midX + (isDismissing && !motionReduced ? layout.bounds.width : 0), y: frame.midY)
+            .animation(snapAnimation, value: corner)
             .onChange(of: isDragging) { _, active in
                 if !active && offset != .zero { settle(at: corner) }
             }
@@ -61,6 +62,7 @@ public struct MediaMiniPlayerDock<Content: View>: View {
     }
 
     private var motionReduced: Bool { reduceMotion || reducesMotion }
+    private var snapAnimation: Animation? { motionReduced ? nil : .easeOut(duration: 0.56) }
 
     private var movement: some Gesture {
         DragGesture(minimumDistance: 5, coordinateSpace: .global)
@@ -88,7 +90,7 @@ public struct MediaMiniPlayerDock<Content: View>: View {
 
     private func settle(at target: MediaMiniPlayerCorner) {
         if target != corner { UISelectionFeedbackGenerator().selectionChanged() }
-        withAnimation(motionReduced ? nil : .easeOut(duration: 0.56)) {
+        withAnimation(snapAnimation) {
             corner = target
             offset = .zero
         }
