@@ -1,49 +1,52 @@
 # Swift Media UI
 
-Swift Media UI is a native Swift package for iPhone, iPad, Mac and Apple TV.
-It provides a source-driven player and reusable SwiftUI and UIKit components for
-media apps. It depends only on Apple SDKs.
+**Native multiview playback and reusable media UI for iPhone, iPad, Mac, and Apple TV.**
 
-## Features
+Swift Media UI grew out of a personal app for watching YouTube and other video
+services with several videos in view and playback that can continue while
+browsing. The reusable player and interface components are available as the
+`MediaUI` Swift package. They use Apple SDKs with no third-party dependencies.
+Your app handles its own catalog, accounts, and playable media sources.
 
-- **Single video and multiview.** Open a playable URL, add videos from a source picker, and switch between a grid and an enlarged video.
-- **Independent sessions.** Select or close one video while the others keep their playback state.
-- **Playback and audio.** Play, pause and seek. Adjust each video's volume and mute, or apply a volume preset to all open videos.
-- **Quality selection.** Use HLS automatic quality or expose the renditions your source supplies. Failed switches keep the previous item.
-- **Picture in Picture.** Use native PiP on supported iPhone, iPad and Mac configurations. iPhone and iPad compose the multiview into a single PiP window.
-- **Reusable components.** Compose video stages, media cards, badges, discussion panels, portrait paging and Apple TV focus controls.
-- **Floating mini-player.** On iPhone and iPad, drag one or more video tiles together and snap them to any corner of the safe viewport.
+[Install](#install) · [Run the demo](#run-the-demo) · [Components](#components)
 
-## Demo app
+![Multiview with sample live streams on Apple TV](Docs/Images/tvos-live.png)
 
-The example uses the production media card, badge, navigation and discussion
-patterns with bundled sample videos, channels, posts and chat. It runs offline.
+*Multiview in the bundled Apple TV demo.*
 
-- **Video** has Home, Subscriptions, Shorts and MY, with search, channel pages,
-  posts, saved videos and watch history.
-- **Live Platform** has Home, MY, LIVE and Categories, with sample streams,
-  replays, clips, channel pages and chat.
-- Open **Settings** to switch experiences. Both use the same `MediaPlayer`
-  for single playback, multiview, quality and audio controls. Collapse the
-  player to keep watching while you browse.
+## Playback
 
-### Screenshots
+- **One video or several.** Open a URL or add videos from a source picker. Enlarge, select, or close a video while the other sessions keep playing.
+- **Per-video controls.** Play, pause, seek, mute, or adjust volume for a video. Apply a volume preset to all open videos together.
+- **Quality selection.** Let HLS choose a rendition automatically, or show the qualities your source provides. If a switch fails, playback can continue with the previous item.
+- **Keep watching while browsing.** Use the in-app mini-player on iPhone and iPad or native Picture in Picture where supported.
 
-Captured from the iPhone, iPad and Apple TV simulators and from the native Mac
-app. Each row shows both experiences.
+## Platform support
 
-| Platform | Video | Live Platform |
+Single-video playback and multiview are available on all four platforms.
+Supported controls use Liquid Glass on current systems and fall back to
+standard materials on earlier supported versions.
+
+| Platform | Minimum OS | Playback outside the main player |
 | --- | --- | --- |
-| iPhone | ![Video home on iPhone](Docs/Images/iphone-video.png) | ![Live home on iPhone](Docs/Images/iphone-live.png) |
-| iPad | ![Video home on iPad](Docs/Images/ipad-video.png) | ![Live multiview on iPad](Docs/Images/ipad-live.png) |
-| Mac | ![Video home on Mac](Docs/Images/macos-video.png) | ![Live home on Mac](Docs/Images/macos-live.png) |
-| Apple TV | ![Video home on Apple TV](Docs/Images/tvos-video.png) | ![Live multiview on Apple TV](Docs/Images/tvos-live.png) |
+| iPhone and iPad | iOS / iPadOS 17 | In-app floating dock; system PiP for one video or a composite of the multiview |
+| Mac | macOS 14 | Single-video PiP through the native AVKit controls |
+| Apple TV | tvOS 17 | In-app playback with Siri Remote focus and context menus |
 
 ## Install
 
-Add the package in Xcode using `https://github.com/xnvr-inc/swift_media_ui.git`
-and select the **MediaUI** library. The minimum deployment targets are iOS 17,
-iPadOS 17, macOS 14 and tvOS 17.
+Build the current source with [Xcode 26.1 or later](https://developer.apple.com/xcode/system-requirements)
+for the Apple SDK APIs used by the package. The OS versions above are the
+deployment targets.
+
+In Xcode, choose **File → Add Package Dependencies**, enter
+`https://github.com/xnvr-inc/swift_media_ui.git`, and add **MediaUI** to
+your app target. Use the `main` branch to try the features documented here.
+Pin a reviewed revision for an app release.
+
+### Play a video
+
+Pass a playable MP4 or HLS URL to the SwiftUI view.
 
 ```swift
 import MediaUI
@@ -51,10 +54,10 @@ import MediaUI
 MediaPlayer(url: videoURL)
 ```
 
-Pass an initial source and a list of available sources to enable the built-in
-picker. Adding, closing, selecting and enlarging a video preserve the remaining
-videos' sessions. Each video has its own volume and mute settings. The volume
-menu has an **All videos** section during multiview.
+### Add multiview
+
+The first list contains the sources that start open. The second list
+populates the player's **Add video** picker.
 
 ```swift
 let first = MediaPlaybackSource(url: firstURL, title: "First video")
@@ -63,20 +66,21 @@ let second = MediaPlaybackSource(url: secondURL, title: "Second video")
 MediaPlayer(sources: [first], availableSources: [second])
 ```
 
-Use `MediaPlayerController` when the host needs to add or close sources from
-elsewhere in its UI. Give each logical video a stable ID if its URL can change.
+Pass a `MediaPlayerController` to add, select, or close videos from elsewhere
+in the host UI. Keep the same controller as the player moves, and give each
+logical video a stable ID when its URL can change.
 
-## Sources and quality
+### Supply quality options
 
-AVFoundation handles supported MP4 and HLS URLs. HLS uses automatic quality
-selection by default. To expose explicit choices, pass the qualities the
-provider can supply and an asynchronous factory for fresh `AVPlayerItem`s.
-The factory receives `nil` for automatic. Use it to refresh signed URLs or
-prepare a custom AVFoundation asset. The player keeps the previous item when a
-quality fails to load and offers retry. For seekable video it restores the
-position when changing items.
+Use an asynchronous item factory when the provider exposes specific renditions
+or issues expiring URLs. The factory receives `nil` for automatic quality.
+A failed switch keeps the previous item and offers retry. Seekable video
+keeps its position when switching items.
 
 ```swift
+import AVFoundation
+import MediaUI
+
 let hd = MediaPlaybackQuality(id: "720p", title: "720p")
 let source = MediaPlaybackSource(id: "episode-1", title: "Episode 1", qualities: [hd]) { quality in
     AVPlayerItem(url: quality == hd ? hdURL : automaticURL)
@@ -85,75 +89,75 @@ let source = MediaPlaybackSource(id: "episode-1", title: "Episode 1", qualities:
 
 ## Picture in Picture
 
-On iPhone and iPad, a single video uses its AVPlayer layer for PiP. Multiview
-uses a composite of decoded frames. A loading source keeps its place in the
-grid and fills in when its first frame arrives. A source that stops supplying
-frames keeps its latest frame. The Mac uses the PiP button in the native AVKit
-video controls. Apple TV uses its remote-focus controls for in-app playback.
+On iPhone and iPad, one video uses its AVPlayer layer. In multiview, the
+compositor fits decoded frames from the open videos into one PiP window.
+A source keeps its place while loading, and a stalled source holds its most
+recent frame. The host can keep that PiP session mounted while playing another
+video in its main UI and manages how their audio plays together.
 
-An iOS host enables **Audio, AirPlay, and Picture in Picture** in Background
-Modes and configures its audio session for playback. Keep the player mounted
-while PiP runs. A host can supply a callback to reveal its player on return.
+For an iOS or iPadOS host, enable **Audio, AirPlay, and Picture in Picture**
+under **Background Modes** and configure the audio session for playback.
+Keep the PiP player mounted and use `onRestorePictureInPicture` to bring
+its screen back into view when appropriate.
 
-## Components
+## Run the demo
 
-The `MediaUI` module also exports `MediaVideoStage`, `PlaybackMultiviewLayout`,
-`MediaPlaybackTiles`, `MediaVolumePresets`, video cards and badges, discussion
-views, portrait paging, and Apple TV focus and side panels. Custom iPhone and
-iPad players can supply AVPlayers or decoded frames through `MediaPiPSource`
-and mount the `MediaMultiviewPictureInPicture` canvas inline. The host owns
-its source resolution, audio mix and scene policy.
+Open [MediaUIDemo.xcodeproj](Examples/MediaUIDemo.xcodeproj). Run
+`MediaUIDemo-iOS` on an iPhone or iPad, `MediaUIDemo-macOS` on **My Mac**,
+or `MediaUIDemo-tvOS` on Apple TV. The demo uses this checkout of the package
+and plays bundled sample clips offline.
 
-On Apple TV, set `TVMediaPlaybackTile.overviewMenu` to show a native context
-menu when Select is held on a focused overview tile. Use `onLongPress` for a
-direct hold action. A short press calls `onOpen`.
+In **Settings**, switch between **Video** (subscriptions, shorts, channels,
+and watch history) and **Live Platform** (live streams, categories, clips,
+and chat). Both experiences use the same player and media components.
 
-Wrap a compact `MediaPlayer` or a set of `MediaPlaybackTiles` in
-`MediaMiniPlayerDock` for in-app playback. The dock takes a corner binding and
-a `MediaMiniPlayerLayout`. The host supplies its safe area and any bottom
-clearance for navigation. Keep the same player or session mounted as the dock
-moves. A slow drag settles at the nearest corner. A quick flick can reach the
-corner in its direction even after a short drag. After release, the player
-decelerates into its corner. Reduce Motion places it directly at the corner.
-Use `MediaMiniPlayerMotion.minimizeDuration` (0.27 seconds) for the host's
-transition from the expanded player into the mini-player.
+<details>
+<summary>Screenshots on all four platforms</summary>
 
-On iPhone and iPad, wrap reading content in `MediaReadingSheet` inside a
-SwiftUI `fullScreenCover` or a transparent UIKit `overFullScreen` presentation.
-The sheet attaches to the screen's bottom and sides and fills roughly two
-thirds of the available height by default. Pass `heightBelowPlayer` to place
-it immediately below a visible video, or supply the app bar's bottom in global
-coordinates as `topEdge`. The area outside the sheet is clear and
-tapping it dismisses the sheet, as does dragging down from the top of the
-reader. Scroll content can reach the sheet's edges, with an inset inside the
-scroll view for the bottom safe area. Place transparent header controls in a
-top `safeAreaInset` so the reader can scroll behind them. Use a surface
-distinct from the surrounding screen. A thin upper edge fades into the
-rounded corners.
+The iPhone, iPad, and Apple TV images are simulator captures. The Mac images
+are from the native Mac demo.
 
-## Run the example
+| Platform | Video | Live Platform |
+| --- | --- | --- |
+| iPhone | ![Video home on iPhone](Docs/Images/iphone-video.png) | ![Live home on iPhone](Docs/Images/iphone-live.png) |
+| iPad | ![Video home on iPad](Docs/Images/ipad-video.png) | ![Live multiview on iPad](Docs/Images/ipad-live.png) |
+| Mac | ![Video home on Mac](Docs/Images/macos-video.png) | ![Live home on Mac](Docs/Images/macos-live.png) |
+| Apple TV | ![Video home on Apple TV](Docs/Images/tvos-video.png) | ![Live multiview on Apple TV](Docs/Images/tvos-live.png) |
 
-Open [MediaUIDemo.xcodeproj](Examples/MediaUIDemo.xcodeproj) in Xcode. Use
-the `MediaUIDemo-iOS` scheme for iPhone and iPad, `MediaUIDemo-tvOS` for
-Apple TV, and `MediaUIDemo-macOS` for Mac. Select a simulator or **My Mac**
-and run. The project uses this checkout's MediaUI package and bundled clips.
+</details>
 
-The Mac example can also run through SwiftPM.
+From the repository root, you can also launch the Mac demo or run the package tests:
 
 ```sh
-swift run MediaUIDemo
+swift run MediaUIDemo --showcase-live --showcase-watch
 swift test
 ```
 
-Add `--showcase-video` or `--showcase-live` to select the starting
-experience, and `--showcase-watch` to open a sample multiview session.
-To regenerate the Xcode project, run `xcodegen generate` from `Examples/`.
+Use `--showcase-video` for the Video experience, or omit `--showcase-watch`
+to start on its home screen. To regenerate the Xcode project with XcodeGen,
+run `xcodegen generate` from `Examples/`.
+
+## Components
+
+Use the [library sources](Sources/MediaUI) and [demo](Examples/MediaUIDemo)
+to compose a custom player or browsing UI.
+
+| Component | Use it for |
+| --- | --- |
+| `MediaVideoStage`, `PlaybackMultiviewLayout`, `MediaPlaybackTiles` | A video surface or a grid of independently controlled playback tiles |
+| `MediaMiniPlayerDock`, `MediaMiniPlayerLayout` | An iPhone or iPad dock that snaps one or more playing tiles to a safe-area corner; reuse `MediaMiniPlayerMotion.minimizeDuration` when collapsing an expanded player |
+| `MediaPiPSource`, `MediaMultiviewPictureInPicture` | Feed AVPlayers or decoded frames to the iPhone and iPad PiP compositor; the host owns the source list, audio mix, and scene behavior |
+| `MediaReadingSheet` | An iPhone or iPad reader in a full-screen presentation; use `heightBelowPlayer` or `topEdge` to position it below the player or app bar |
+| `TVMediaPlaybackTile` | Remote focus and Select on Apple TV; hold Select for `overviewMenu` or an `onLongPress` action |
+
+The module also includes volume presets, media cards, badges, discussion views,
+portrait paging, and Apple TV side panels.
 
 ## Codex skill
 
 Copy [skills/swift-media-ui](skills/swift-media-ui) into your Codex skills
-directory, then use `$swift-media-ui` when integrating the package. The skill
-covers source factories, platform focus, quality recovery and PiP verification.
+directory and use `$swift-media-ui` for help with source factories, focus,
+quality recovery, and PiP verification.
 
 ```sh
 mkdir -p "${CODEX_HOME:-$HOME/.codex}/skills"
@@ -162,4 +166,4 @@ cp -R skills/swift-media-ui "${CODEX_HOME:-$HOME/.codex}/skills/"
 
 ## License
 
-[MIT](LICENSE).
+[MIT](LICENSE) · [xnvr](https://xnvr.dev/#open-source)
