@@ -103,8 +103,9 @@ iPad players can supply AVPlayers or decoded frames through `MediaPiPSource`
 and mount the `MediaMultiviewPictureInPicture` canvas inline. The host owns
 its source resolution, audio mix and scene policy.
 
-On Apple TV, set `TVMediaPlaybackTile.onLongPress` to handle holding Select on a
-focused overview tile. A short press continues to call `onOpen`.
+On Apple TV, set `TVMediaPlaybackTile.overviewMenu` to show a native context
+menu when Select is held on a focused overview tile. Use `onLongPress` for a
+direct hold action. A short press calls `onOpen`.
 
 ## Run the example
 

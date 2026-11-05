@@ -14,7 +14,12 @@ import UIKit
     public var onOpen: (() -> Void)?
     /// Handles a held Select press on a focused overview tile.
     public var onLongPress: (() -> Void)? {
-        didSet { selectHold.isEnabled = isOverview && onLongPress != nil }
+        didSet { updateSelectInteraction() }
+    }
+    /// Presents a native context menu on held Select while the tile is in the overview.
+    /// When provided, the menu handles held Select in place of `onLongPress`.
+    public var overviewMenu: UIMenu? {
+        didSet { updateSelectInteraction() }
     }
     public var isFocusEnabled = true
     public var isOverview = false {
@@ -23,8 +28,7 @@ import UIKit
             caption.isHidden = !isOverview || !showsCaption
             isAccessibilityElement = isOverview
             layer.cornerRadius = isOverview ? TVMediaLayout.Corner.card : 0
-            selectTap.isEnabled = isOverview
-            selectHold.isEnabled = isOverview && onLongPress != nil
+            updateSelectInteraction()
         }
     }
     public var showsCaption = true { didSet { caption.isHidden = !isOverview || !showsCaption } }
@@ -76,6 +80,14 @@ import UIKit
 
     open override var isSelected: Bool { didSet { updateBorder() } }
 
+    open override func contextMenuInteraction(_ interaction: UIContextMenuInteraction,
+                                              configurationForMenuAtLocation location: CGPoint) -> UIContextMenuConfiguration? {
+        guard isOverview, let overviewMenu else { return nil }
+        let configuration = UIContextMenuConfiguration(actionProvider: { _ in overviewMenu })
+        configuration.preferredMenuElementOrder = .fixed
+        return configuration
+    }
+
     open override func layoutSubviews() {
         super.layoutSubviews()
         let size = referenceSize.width > 0 ? referenceSize : bounds.size
@@ -103,6 +115,12 @@ import UIKit
         layer.borderWidth = isOverview && (isSelected || isFocused) ? MediaMultiviewMetrics.focusBorderWidth : 0
         layer.borderColor = (isFocused ? focusedColor : selectedColor).cgColor
         accessibilityTraits = isSelected ? [.button, .selected] : [.button]
+    }
+
+    private func updateSelectInteraction() {
+        isContextMenuInteractionEnabled = isOverview && overviewMenu != nil
+        selectTap.isEnabled = isOverview
+        selectHold.isEnabled = isOverview && overviewMenu == nil && onLongPress != nil
     }
 
     @objc private func open() { onOpen?() }
