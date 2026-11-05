@@ -23,6 +23,7 @@ import UIKit
             caption.isHidden = !isOverview || !showsCaption
             isAccessibilityElement = isOverview
             layer.cornerRadius = isOverview ? TVMediaLayout.Corner.card : 0
+            selectTap.isEnabled = isOverview
             selectHold.isEnabled = isOverview && onLongPress != nil
         }
     }
@@ -30,6 +31,14 @@ import UIKit
     public var referenceSize: CGSize = .zero { didSet { setNeedsLayout() } }
     private let canvas = UIView()
     private let caption = UILabel()
+    private lazy var selectTap: UITapGestureRecognizer = {
+        let recognizer = UITapGestureRecognizer(target: self, action: #selector(tapSelect))
+        recognizer.allowedPressTypes = [NSNumber(value: UIPress.PressType.select.rawValue)]
+        recognizer.allowedTouchTypes = []
+        recognizer.require(toFail: selectHold)
+        recognizer.isEnabled = false
+        return recognizer
+    }()
     private lazy var selectHold: UILongPressGestureRecognizer = {
         let recognizer = UILongPressGestureRecognizer(target: self, action: #selector(holdSelect(_:)))
         recognizer.allowedPressTypes = [NSNumber(value: UIPress.PressType.select.rawValue)]
@@ -58,6 +67,7 @@ import UIKit
         addSubview(caption)
         addTarget(self, action: #selector(open), for: .primaryActionTriggered)
         addGestureRecognizer(selectHold)
+        addGestureRecognizer(selectTap)
     }
 
     public required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
@@ -96,6 +106,11 @@ import UIKit
     }
 
     @objc private func open() { onOpen?() }
+
+    @objc private func tapSelect() {
+        guard isFocused else { return }
+        sendActions(for: .primaryActionTriggered)
+    }
 
     @objc private func holdSelect(_ recognizer: UILongPressGestureRecognizer) {
         guard recognizer.state == .began, isFocused else { return }
