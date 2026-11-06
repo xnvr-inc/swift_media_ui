@@ -62,33 +62,37 @@ public struct MediaPortraitPhoneSelection<ID: Hashable>: ViewModifier {
 public struct MediaPortraitMacSelection<ID: Hashable & Sendable>: ViewModifier {
     private let selection: ID
     private let select: (ID) -> Void
-    let isDisplayed: Bool
-    @State private var position: ScrollPosition
+    private let isDisplayed: Bool
+    @State private var visibleID: ID?
+    @State private var pendingAlignment: ID?
 
     public init(selection: ID, isDisplayed: Bool, select: @escaping (ID) -> Void) {
         self.selection = selection
         self.select = select
         self.isDisplayed = isDisplayed
-        _position = State(initialValue: ScrollPosition(id: selection, anchor: .top))
+        _pendingAlignment = State(initialValue: selection)
     }
 
     public func body(content: Content) -> some View {
         ScrollViewReader { proxy in
             content
-                .scrollPosition($position, anchor: .center)
-                .task(id: isDisplayed) {
-                    guard isDisplayed else { return }
-                    // The initial ScrollPosition value is a binding seed, not
-                    // evidence that the native scroll view moved to that row.
-                    proxy.scrollTo(selection, anchor: .top)
-                }
-                .onChange(of: position.viewID(type: ID.self)) { _, id in
-                    if isDisplayed, position.isPositionedByUser, let id { select(id) }
-                }
-                .onChange(of: selection) { _, id in
-                    if position.viewID(type: ID.self) != id { proxy.scrollTo(id, anchor: .top) }
+                .task(id: isDisplayed) { align(proxy) }
+                .onChange(of: selection) { align(proxy) }
+                // macOS can change the visible page while isPositionedByUser remains false.
+                .onScrollTargetVisibilityChange(idType: ID.self, threshold: 0.5) { ids in
+                    guard ids.count == 1, let id = ids.first else { return }
+                    visibleID = id
+                    guard pendingAlignment == nil || pendingAlignment == id else { return }
+                    pendingAlignment = nil
+                    if isDisplayed, id != selection { select(id) }
                 }
         }
+    }
+
+    private func align(_ proxy: ScrollViewProxy) {
+        guard isDisplayed else { return }
+        pendingAlignment = visibleID == selection ? nil : selection
+        if pendingAlignment != nil { proxy.scrollTo(selection, anchor: .top) }
     }
 }
 #endif
