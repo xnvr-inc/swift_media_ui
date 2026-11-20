@@ -108,9 +108,12 @@ public struct MediaTabBarExpansionPolicy: Equatable {
         }
         // Pushed further past the far edge the user is still moving down, so the
         // next reverse scroll is a new one. A position beyond a range that shrank
-        // is not that, and neither is a previous position beyond the current range:
-        // the content changed under the page, which is not the user reversing.
-        if rawDistance > maximum, rawDistance > lastRaw, isUserScrolling { expandedForReverse = false }
+        // is not that, and neither is a jump: the content changed under the page,
+        // which is not the user moving it.
+        if rawDistance > maximum, rawDistance > lastRaw, isUserScrolling,
+           abs(distance - last) <= viewportHeight * 0.5 {
+            expandedForReverse = false
+        }
         guard rawDistance <= maximum,
               last <= maximum,
               isUserScrolling,

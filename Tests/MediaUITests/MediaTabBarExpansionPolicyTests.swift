@@ -156,6 +156,15 @@ final class MediaTabBarExpansionPolicyTests: XCTestCase {
         XCTAssertTrue(policy.expands(atDistance: 946, maximumDistance: 960))
     }
 
+    func testAJumpBeyondTheFarEdgeDoesNotRearmTheReverseExpansion() {
+        var policy = MediaTabBarExpansionPolicy()
+        _ = feed(&policy, [0, 320], maximum: 1_000, viewport: 800)
+        XCTAssertEqual(feed(&policy, [300], maximum: 1_000, viewport: 800), [300])
+        // The page lands past the far edge, 700 pt away, in the same gesture: a jump
+        // is not the user pushing down, so the same upward gesture does not ask again.
+        XCTAssertEqual(feed(&policy, [1_008, 1_000, 987], maximum: 1_000, viewport: 800), [])
+    }
+
     func testAShortPageStillExpandsOnReverseAndAtTheTop() {
         var policy = MediaTabBarExpansionPolicy()
         XCTAssertEqual(feed(&policy, [0, 25, 12, 0], maximum: 25), [12, 0])
