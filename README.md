@@ -148,6 +148,7 @@ to compose a custom player or browsing UI.
 | `MediaMiniPlayerDock`, `MediaMiniPlayerLayout` | An iPhone or iPad dock that snaps one or more playing tiles to a safe-area corner; reuse `MediaMiniPlayerMotion.minimizeDuration` when collapsing an expanded player |
 | `MediaPiPSource`, `MediaMultiviewPictureInPicture` | Feed AVPlayers or decoded frames to the iPhone and iPad PiP compositor; the host owns the source list, audio mix, and scene behavior |
 | `MediaReadingSheet` | An iPhone or iPad reader in a full-screen presentation; use `heightBelowPlayer` or `topEdge` to position it below the player or app bar |
+| `mediaMinimizingTabBar()`, `mediaScrollAwayAppBar()` | An iPhone page whose app bar leaves with the content and returns at the top, while the tab bar shrinks on scroll down and expands on scroll up (iOS 26; earlier systems keep the standard bars). Apply the first to the `TabView` and the second to each tab's root page |
 | `TVMediaPlaybackTile` | Remote focus and Select on Apple TV; hold Select for `overviewMenu` or an `onLongPress` action |
 
 The module also includes volume presets, media cards, badges, discussion views,

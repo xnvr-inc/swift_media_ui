@@ -108,6 +108,9 @@ struct DemoRoot: View {
                     .tag(tab)
             }
         }
+        #if os(iOS)
+        .mediaMinimizingTabBar()
+        #endif
     }
 
     private func stack(_ tab: DemoTab) -> some View {
@@ -116,6 +119,7 @@ struct DemoRoot: View {
                 .navigationTitle(tab.title)
                 #if os(iOS)
                 .navigationBarTitleDisplayMode(.inline)
+                .mediaScrollAwayAppBar()
                 #endif
                 .toolbar {
                     #if os(iOS)
