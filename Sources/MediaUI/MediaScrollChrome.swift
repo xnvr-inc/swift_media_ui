@@ -42,30 +42,36 @@ public enum MediaScrollAwayAppBarMetrics {
 /// When a minimized tab bar should expand again, as a page scrolls.
 ///
 /// Mirrors the Flutter tab bar policy (`GlassTabBarMinimizeController`): the bar
-/// shrinks while scrolling down and expands on a reverse scroll and when the page
-/// is back at its top. Only the user's own scrolling counts as a reverse scroll;
-/// rubber-banding at the far edge and jumps do not.
+/// shrinks while scrolling down and expands on a reverse scroll, when the page
+/// is back at its top and when the page stops being scrollable. Only the user's
+/// own scrolling counts as a reverse scroll; rubber-banding at the far edge,
+/// jumps and content changes do not.
 public struct MediaTabBarExpansionPolicy: Equatable {
     /// Upward travel since the last reversal that counts as a deliberate reverse
     /// scroll, the Flutter `kExpandThreshold`.
     public static let reverseDistance: CGFloat = 12
     /// Distance from the resting top that counts as being at the top.
     public static let topTolerance: CGFloat = 0.5
+    /// Scrollable range below which a page counts as not scrollable, the Flutter
+    /// `kMinScrollableExtent`.
+    public static let minimumScrollableDistance: CGFloat = 40
 
     private var last: CGFloat = 0
     private var reverseTravel: CGFloat = 0
     private var expandedForReverse = false
+    private var wasScrollable = false
 
     public init() {}
 
     /// Feeds the page's scroll `distance` from its resting top and returns
-    /// whether the tab bar should expand now. It asks once per reverse scroll
-    /// and once on arriving at the top.
+    /// whether the tab bar should expand now. It asks once per reverse scroll,
+    /// once on arriving at the top and once when the page stops scrolling.
     ///
     /// - Parameters:
     ///   - maximumDistance: The farthest the page can scroll. A distance beyond
-    ///     it is rubber-banding at the far edge and is read as the edge itself,
-    ///     so the rebound is never a reverse scroll.
+    ///     it is rubber-banding at the far edge, which moves without the user
+    ///     reversing anything, so those samples never count, whatever the page's
+    ///     extent does meanwhile.
     ///   - viewportHeight: A change larger than half of it is a jump, such as a
     ///     restored position, not a scroll.
     ///   - isUserScrolling: Whether the user's finger or its momentum moves the
@@ -77,8 +83,18 @@ public struct MediaTabBarExpansionPolicy: Equatable {
         viewportHeight: CGFloat = .greatestFiniteMagnitude,
         isUserScrolling: Bool = true
     ) -> Bool {
-        let distance = min(max(rawDistance, 0), max(maximumDistance, 0))
-        defer { last = distance }
+        let maximum = max(maximumDistance, 0)
+        let distance = min(max(rawDistance, 0), maximum)
+        let scrollable = maximum >= Self.minimumScrollableDistance
+        defer {
+            last = distance
+            wasScrollable = scrollable
+        }
+        // A page that stops scrolling must not leave the bar minimized.
+        guard scrollable else {
+            reverseTravel = 0
+            return wasScrollable
+        }
         let atTop = distance <= Self.topTolerance
         if atTop {
             reverseTravel = 0
@@ -86,7 +102,10 @@ public struct MediaTabBarExpansionPolicy: Equatable {
             expandedForReverse = true
             return true
         }
-        guard isUserScrolling, abs(distance - last) <= viewportHeight * 0.5 else {
+        guard rawDistance <= maximum,
+              isUserScrolling,
+              abs(distance - last) <= viewportHeight * 0.5
+        else {
             reverseTravel = 0
             return false
         }
@@ -223,7 +242,9 @@ private struct MediaScrollAwayAppBar: ViewModifier {
                 if driver.scrolled(to: sample) { minimizer?.expand() }
             }
             .onScrollPhaseChange { _, phase in
-                driver.isUserScrolling = phase.isScrolling && phase != .animating
+                // `.tracking` is a finger resting on the page before it moves, and
+                // `.animating` is the app scrolling it: neither is the user scrolling.
+                driver.isUserScrolling = phase == .interacting || phase == .decelerating
             }
             .onChange(of: isEnabled && !voiceOver, initial: true) { _, scrollsAway in
                 driver.isEnabled = scrollsAway
@@ -236,15 +257,29 @@ private struct MediaScrollAwayAppBar: ViewModifier {
 @available(iOS 26, *)
 @MainActor
 private final class MediaAppBarDriver {
+    /// What a view looked like before this driver changed it.
+    private final class Original {
+        let alpha: CGFloat
+        let sublayerTransform: CATransform3D
+        let isUserInteractionEnabled: Bool
+
+        init(_ view: UIView) {
+            alpha = view.alpha
+            sublayerTransform = view.layer.sublayerTransform
+            isUserInteractionEnabled = view.isUserInteractionEnabled
+        }
+    }
+
     weak var navigationBar: UINavigationBar?
     private var distance: CGFloat = 0
     private var expansion = MediaTabBarExpansionPolicy()
-    /// Whether the page is on screen. The navigation bar is shared with the
-    /// pages pushed over this one, so an off-screen page never writes to it.
+    /// Whether the page owns the bar. The navigation bar is shared with the
+    /// pages pushed over this one, so a page that is off screen, or still being
+    /// revealed by a transition, never writes to it.
     private var isOnScreen = false
     /// Whether the user's finger, or its momentum, is moving the page.
     var isUserScrolling = false
-    private let touched = NSHashTable<UIView>.weakObjects()
+    private let touched = NSMapTable<UIView, Original>(keyOptions: .weakMemory, valueOptions: .strongMemory)
     var isEnabled = true {
         didSet { if isEnabled != oldValue { apply() } }
     }
@@ -253,9 +288,10 @@ private final class MediaAppBarDriver {
     func scrolled(to sample: MediaScrollSample) -> Bool {
         // Rubber-banding above the top must not push the bar down.
         let next = max(sample.distance, 0)
-        guard next != distance else { return false }
-        distance = next
-        apply()
+        if next != distance {
+            distance = next
+            apply()
+        }
         return expansion.expands(
             atDistance: sample.distance,
             maximumDistance: sample.maximumDistance,
@@ -282,6 +318,24 @@ private final class MediaAppBarDriver {
         reset()
     }
 
+    /// Dissolves the bar's content to where this page leaves it, inside the
+    /// animation of a transition that brings the page back, so the bar of the
+    /// page that is leaving is not cut off. The page owns the bar once the
+    /// transition has finished; a cancelled one restores the bar by itself.
+    func dissolve(in bar: UINavigationBar?) {
+        guard isEnabled, let bar else { return }
+        if bar !== navigationBar {
+            reset()
+            navigationBar = bar
+        }
+        let height = bar.bounds.height
+        let shift = MediaScrollAwayAppBarMetrics.shift(atDistance: distance, barHeight: height)
+        for item in items {
+            remember(item)
+            item.alpha = MediaScrollAwayAppBarMetrics.opacity(forShift: shift)
+        }
+    }
+
     /// The bar's own frame feeds the page's top inset, so moving the bar itself
     /// would resize the page's content. Its content moves instead, never the
     /// system background that owns the scroll edge effect.
@@ -289,17 +343,20 @@ private final class MediaAppBarDriver {
         navigationBar?.subviews.filter { !String(describing: type(of: $0)).contains("Background") } ?? []
     }
 
-    /// Puts every view this driver changed back, for example when the page
-    /// leaves the screen.
-    func reset() {
-        for item in touched.allObjects { restore(item) }
-        touched.removeAllObjects()
+    private func remember(_ item: UIView) {
+        if touched.object(forKey: item) == nil { touched.setObject(Original(item), forKey: item) }
     }
 
-    private func restore(_ item: UIView) {
-        item.layer.sublayerTransform = CATransform3DIdentity
-        item.alpha = 1
-        item.isUserInteractionEnabled = true
+    /// Puts every view this driver changed back as it was, for example when the
+    /// page leaves the screen.
+    func reset() {
+        for item in touched.keyEnumerator().allObjects.compactMap({ $0 as? UIView }) {
+            guard let original = touched.object(forKey: item) else { continue }
+            item.layer.sublayerTransform = original.sublayerTransform
+            item.alpha = original.alpha
+            item.isUserInteractionEnabled = original.isUserInteractionEnabled
+        }
+        touched.removeAllObjects()
     }
 
     func apply() {
@@ -308,7 +365,7 @@ private final class MediaAppBarDriver {
         let shift = MediaScrollAwayAppBarMetrics.shift(atDistance: distance, barHeight: height)
         let gone = MediaScrollAwayAppBarMetrics.isGone(forShift: shift, barHeight: height)
         for item in items {
-            touched.add(item)
+            remember(item)
             // A sublayer transform, not the view's own: UIKit sets the item's
             // frame when it lays the bar out, which cancels a view transform.
             item.layer.sublayerTransform = CATransform3DMakeTranslation(0, -shift, 0)
@@ -343,7 +400,20 @@ private struct MediaAppBarAnchor: UIViewControllerRepresentable {
 
         override func viewWillAppear(_ animated: Bool) {
             super.viewWillAppear(animated)
-            driver.appeared(in: navigationController?.navigationBar)
+            let driver = driver
+            let bar = navigationController?.navigationBar
+            guard let coordinator = transitionCoordinator else { return driver.appeared(in: bar) }
+            // The bar still shows the page that is leaving, so it only dissolves
+            // along with the transition; the page owns the bar once it is over.
+            coordinator.animate(alongsideTransition: { _ in
+                driver.dissolve(in: bar)
+            }, completion: { [weak self] context in
+                if context.isCancelled {
+                    driver.disappeared()
+                } else {
+                    driver.appeared(in: self?.navigationController?.navigationBar)
+                }
+            })
         }
 
         override func viewDidAppear(_ animated: Bool) {

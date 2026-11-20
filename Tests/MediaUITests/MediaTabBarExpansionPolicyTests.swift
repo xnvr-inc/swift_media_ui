@@ -107,4 +107,38 @@ final class MediaTabBarExpansionPolicyTests: XCTestCase {
         // A restored position half a viewport or more away, then a real reverse scroll from there.
         XCTAssertEqual(feed(&policy, [1_000, 996, 984], viewport: 800), [984])
     }
+
+    func testAChangingExtentDuringTheReboundIsStillTheRebound() {
+        var policy = MediaTabBarExpansionPolicy()
+        _ = feed(&policy, [0, 900, 1_000], maximum: 1_000)
+        // The list shrinks while the page is stretched past its end: the clamped
+        // distance falls from 1,000 to 980 without the user reversing anything.
+        XCTAssertFalse(policy.expands(atDistance: 1_040, maximumDistance: 1_000))
+        XCTAssertFalse(policy.expands(atDistance: 1_025, maximumDistance: 980))
+        XCTAssertFalse(policy.expands(atDistance: 1_000, maximumDistance: 980))
+        XCTAssertFalse(policy.expands(atDistance: 980, maximumDistance: 980))
+    }
+
+    func testAPageThatStopsScrollingExpandsTheBarOnce() {
+        var policy = MediaTabBarExpansionPolicy()
+        _ = feed(&policy, [0, 400], maximum: 800)
+        // The content shrinks to 25 pt of scroll range, below the Flutter 40 pt minimum.
+        XCTAssertTrue(policy.expands(atDistance: 25, maximumDistance: 25))
+        XCTAssertFalse(policy.expands(atDistance: 25, maximumDistance: 25))
+        XCTAssertFalse(policy.expands(atDistance: 10, maximumDistance: 25))
+    }
+
+    func testAPageThatNeverScrollsNeverAsksToExpand() {
+        var policy = MediaTabBarExpansionPolicy()
+        XCTAssertFalse(policy.expands(atDistance: 0, maximumDistance: 25))
+        XCTAssertFalse(policy.expands(atDistance: 0, maximumDistance: 25))
+    }
+
+    func testAPageThatScrollsAgainRearmsTheShortContentExpansion() {
+        var policy = MediaTabBarExpansionPolicy()
+        _ = feed(&policy, [0, 400], maximum: 800)
+        XCTAssertTrue(policy.expands(atDistance: 25, maximumDistance: 25))
+        _ = feed(&policy, [60, 300], maximum: 800)
+        XCTAssertTrue(policy.expands(atDistance: 25, maximumDistance: 25))
+    }
 }
