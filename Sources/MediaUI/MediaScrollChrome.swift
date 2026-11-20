@@ -19,8 +19,10 @@ public enum MediaScrollAwayAppBarMetrics {
 
 #if os(iOS)
 public extension View {
-    /// Shrinks the tab bar to its compact form while the page scrolls down and
-    /// restores it when the page scrolls back up, so content gets the room.
+    /// Shrinks the tab bar to its compact form while the page scrolls down, so
+    /// content gets the room. The system expands it again at the top of the
+    /// page or when it is tapped. That tap only expands the bar and does not
+    /// select a tab, so a repeat selection of the current tab needs a second tap.
     /// Apply it to the `TabView`. Earlier systems keep the standard tab bar.
     @ViewBuilder func mediaMinimizingTabBar() -> some View {
         if #available(iOS 26, *) {
