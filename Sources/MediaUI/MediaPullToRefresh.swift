@@ -1,5 +1,22 @@
-#if os(iOS)
 import SwiftUI
+
+/// When a downward drag that began at the top of a feed asks for a refresh.
+enum MediaPullToRefreshGesture {
+  /// Finger travel that refreshes on release.
+  static let pullDistance: CGFloat = 120
+  /// Shorter travel that still refreshes when the finger is moving fast: a flick
+  /// rubber-bands the feed less than a slow pull of the same intent.
+  static let flickDistance: CGFloat = 80
+  static let flickVelocity: CGFloat = 800
+
+  static func requestsRefresh(translation: CGPoint, velocity: CGPoint) -> Bool {
+    guard translation.y > abs(translation.x) else { return false }
+    return translation.y >= pullDistance
+      || (translation.y >= flickDistance && velocity.y >= flickVelocity)
+  }
+}
+
+#if os(iOS)
 import UIKit
 
 public extension View {
@@ -83,8 +100,13 @@ private struct MediaRefreshControl: UIViewRepresentable {
       case .ended:
         defer { startedAtTop = false }
         let pull = gesture.translation(in: scrollView)
-        // The system action can be skipped when the entire feed fits onscreen.
-        guard startedAtTop, pull.y >= 120, pull.y > abs(pull.x), !control.isRefreshing, task == nil else { return }
+        let velocity = gesture.velocity(in: scrollView)
+        // The system action can be skipped when the entire feed fits onscreen,
+        // or when a quick flick does not stretch the feed far enough.
+        guard startedAtTop,
+          MediaPullToRefreshGesture.requestsRefresh(translation: pull, velocity: velocity),
+          !control.isRefreshing, task == nil
+        else { return }
         control.beginRefreshing()
         refreshRequested()
       case .cancelled, .failed:
