@@ -90,10 +90,12 @@ public struct MediaTabBarExpansionPolicy: Equatable {
             last = distance
             wasScrollable = scrollable
         }
-        // A page that stops scrolling must not leave the bar minimized.
-        guard scrollable else {
+        // A page that stops scrolling must not leave the bar minimized. The
+        // reverse and top rules below still apply to a short page afterwards.
+        if wasScrollable && !scrollable {
             reverseTravel = 0
-            return wasScrollable
+            expandedForReverse = true
+            return true
         }
         let atTop = distance <= Self.topTolerance
         if atTop {
@@ -102,7 +104,12 @@ public struct MediaTabBarExpansionPolicy: Equatable {
             expandedForReverse = true
             return true
         }
+        // Beyond the far edge the user is still pushing down, so the next reverse
+        // scroll is a new one. A previous position beyond the current range means
+        // the content shrank under the page, which is not the user reversing.
+        if rawDistance > maximum { expandedForReverse = false }
         guard rawDistance <= maximum,
+              last <= maximum,
               isUserScrolling,
               abs(distance - last) <= viewportHeight * 0.5
         else {
@@ -277,6 +284,12 @@ private final class MediaAppBarDriver {
     /// pages pushed over this one, so a page that is off screen, or still being
     /// revealed by a transition, never writes to it.
     private var isOnScreen = false
+    /// Whether a transition is bringing the page back. Its dissolve owns the bar
+    /// until the transition ends, so a scroll sample in between leaves it alone.
+    private var isRevealing = false
+    /// Identifies the transition that is revealing the page, so the completion of
+    /// an earlier one cannot undo a later appearance.
+    private var revealToken = 0
     /// Whether the user's finger, or its momentum, is moving the page.
     var isUserScrolling = false
     private let touched = NSMapTable<UIView, Original>(keyOptions: .weakMemory, valueOptions: .strongMemory)
@@ -308,22 +321,45 @@ private final class MediaAppBarDriver {
     }
 
     func appeared(in bar: UINavigationBar?) {
+        endReveal()
         isOnScreen = true
         attach(bar)
         apply()
     }
 
     func disappeared() {
+        endReveal()
         isOnScreen = false
         reset()
+    }
+
+    /// Starts a transition that brings the page back. Returns the token that its
+    /// dissolve and its completion present.
+    func beginReveal() -> Int {
+        revealToken += 1
+        isRevealing = true
+        return revealToken
+    }
+
+    /// Ends the transition `token` started: the page owns the bar, or, when the
+    /// transition was cancelled, gives it back. A later appearance or
+    /// disappearance has already ended the transition, and this does nothing.
+    func finishReveal(_ token: Int, cancelled: Bool, in bar: UINavigationBar?) {
+        guard token == revealToken else { return }
+        if cancelled { disappeared() } else { appeared(in: bar) }
+    }
+
+    private func endReveal() {
+        revealToken += 1
+        isRevealing = false
     }
 
     /// Dissolves the bar's content to where this page leaves it, inside the
     /// animation of a transition that brings the page back, so the bar of the
     /// page that is leaving is not cut off. The page owns the bar once the
     /// transition has finished; a cancelled one restores the bar by itself.
-    func dissolve(in bar: UINavigationBar?) {
-        guard isEnabled, let bar else { return }
+    func dissolve(in bar: UINavigationBar?, token: Int) {
+        guard token == revealToken, isEnabled, let bar else { return }
         if bar !== navigationBar {
             reset()
             navigationBar = bar
@@ -360,7 +396,13 @@ private final class MediaAppBarDriver {
     }
 
     func apply() {
-        guard let navigationBar, isOnScreen, isEnabled else { return reset() }
+        guard let navigationBar, isEnabled else { return reset() }
+        // An off-screen page never writes to the bar, and one being revealed
+        // leaves it to the dissolve of its transition.
+        guard isOnScreen else {
+            if !isRevealing { reset() }
+            return
+        }
         let height = navigationBar.bounds.height
         let shift = MediaScrollAwayAppBarMetrics.shift(atDistance: distance, barHeight: height)
         let gone = MediaScrollAwayAppBarMetrics.isGone(forShift: shift, barHeight: height)
@@ -405,14 +447,15 @@ private struct MediaAppBarAnchor: UIViewControllerRepresentable {
             guard let coordinator = transitionCoordinator else { return driver.appeared(in: bar) }
             // The bar still shows the page that is leaving, so it only dissolves
             // along with the transition; the page owns the bar once it is over.
+            let token = driver.beginReveal()
             coordinator.animate(alongsideTransition: { _ in
-                driver.dissolve(in: bar)
+                driver.dissolve(in: bar, token: token)
             }, completion: { [weak self] context in
-                if context.isCancelled {
-                    driver.disappeared()
-                } else {
-                    driver.appeared(in: self?.navigationController?.navigationBar)
-                }
+                driver.finishReveal(
+                    token,
+                    cancelled: context.isCancelled,
+                    in: self?.navigationController?.navigationBar
+                )
             })
         }
 

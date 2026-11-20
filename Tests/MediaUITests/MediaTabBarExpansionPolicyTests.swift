@@ -119,6 +119,33 @@ final class MediaTabBarExpansionPolicyTests: XCTestCase {
         XCTAssertFalse(policy.expands(atDistance: 980, maximumDistance: 980))
     }
 
+    func testAShrinkArrivingTogetherWithTheClampIsNotAReverseScroll() {
+        var policy = MediaTabBarExpansionPolicy()
+        _ = feed(&policy, [0, 900, 1_000], maximum: 1_000)
+        // Momentum carries the page past its end and, in the same sample, the
+        // list shrinks so the range is 980: the position falls by 20 pt
+        // without the user reversing anything.
+        XCTAssertFalse(policy.expands(atDistance: 1_040, maximumDistance: 1_000))
+        XCTAssertFalse(policy.expands(atDistance: 980, maximumDistance: 980))
+        // A real reverse scroll from there still expands.
+        XCTAssertFalse(policy.expands(atDistance: 974, maximumDistance: 980))
+        XCTAssertTrue(policy.expands(atDistance: 968, maximumDistance: 980))
+    }
+
+    func testAnOvershootAtTheFarEdgeRearmsTheReverseExpansion() {
+        var policy = MediaTabBarExpansionPolicy()
+        _ = feed(&policy, [0, 900, 1_000], maximum: 1_000)
+        XCTAssertEqual(feed(&policy, [988], maximum: 1_000), [988])
+        // The user flings down past the end and back: the next reverse scroll is
+        // a new one, even though the overshoot used up the only downward step.
+        XCTAssertEqual(feed(&policy, [1_008, 1_000, 987, 960], maximum: 1_000), [987])
+    }
+
+    func testAShortPageStillExpandsOnReverseAndAtTheTop() {
+        var policy = MediaTabBarExpansionPolicy()
+        XCTAssertEqual(feed(&policy, [0, 25, 12, 0], maximum: 25), [12, 0])
+    }
+
     func testAPageThatStopsScrollingExpandsTheBarOnce() {
         var policy = MediaTabBarExpansionPolicy()
         _ = feed(&policy, [0, 400], maximum: 800)
