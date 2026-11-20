@@ -60,6 +60,7 @@ public struct MediaTabBarExpansionPolicy: Equatable {
     private var reverseTravel: CGFloat = 0
     private var expandedForReverse = false
     private var wasScrollable = false
+    private var lastRaw: CGFloat = 0
 
     public init() {}
 
@@ -88,6 +89,7 @@ public struct MediaTabBarExpansionPolicy: Equatable {
         let scrollable = maximum >= Self.minimumScrollableDistance
         defer {
             last = distance
+            lastRaw = rawDistance
             wasScrollable = scrollable
         }
         // A page that stops scrolling must not leave the bar minimized. The
@@ -104,10 +106,11 @@ public struct MediaTabBarExpansionPolicy: Equatable {
             expandedForReverse = true
             return true
         }
-        // Beyond the far edge the user is still pushing down, so the next reverse
-        // scroll is a new one. A previous position beyond the current range means
-        // the content shrank under the page, which is not the user reversing.
-        if rawDistance > maximum { expandedForReverse = false }
+        // Pushed further past the far edge the user is still moving down, so the
+        // next reverse scroll is a new one. A position beyond a range that shrank
+        // is not that, and neither is a previous position beyond the current range:
+        // the content changed under the page, which is not the user reversing.
+        if rawDistance > maximum, rawDistance > lastRaw, isUserScrolling { expandedForReverse = false }
         guard rawDistance <= maximum,
               last <= maximum,
               isUserScrolling,

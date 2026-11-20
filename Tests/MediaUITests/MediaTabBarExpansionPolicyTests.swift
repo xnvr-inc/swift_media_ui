@@ -141,6 +141,21 @@ final class MediaTabBarExpansionPolicyTests: XCTestCase {
         XCTAssertEqual(feed(&policy, [1_008, 1_000, 987, 960], maximum: 1_000), [987])
     }
 
+    func testAShrinkAfterAReverseExpansionDoesNotRearmIt() {
+        var policy = MediaTabBarExpansionPolicy()
+        _ = feed(&policy, [0, 900, 1_000], maximum: 1_000)
+        XCTAssertEqual(feed(&policy, [988], maximum: 1_000), [988])
+        // The list shrinks to a range of 960 while the user keeps moving up: the
+        // position is beyond the new range for one sample, but nothing pushed it
+        // further down, so the same upward gesture does not ask a second time.
+        XCTAssertFalse(policy.expands(atDistance: 980, maximumDistance: 960))
+        XCTAssertFalse(policy.expands(atDistance: 960, maximumDistance: 960))
+        XCTAssertFalse(policy.expands(atDistance: 948, maximumDistance: 960))
+        // Scrolling down and then reversing is a new reverse scroll.
+        XCTAssertFalse(policy.expands(atDistance: 958, maximumDistance: 960))
+        XCTAssertTrue(policy.expands(atDistance: 946, maximumDistance: 960))
+    }
+
     func testAShortPageStillExpandsOnReverseAndAtTheTop() {
         var policy = MediaTabBarExpansionPolicy()
         XCTAssertEqual(feed(&policy, [0, 25, 12, 0], maximum: 25), [12, 0])
