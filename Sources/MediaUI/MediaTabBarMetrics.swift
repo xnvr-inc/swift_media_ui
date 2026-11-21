@@ -76,6 +76,15 @@ public enum MediaTabBarMetrics {
         public func slotCenter(at position: CGFloat) -> CGFloat {
             inset + slotWidth * (position + 0.5)
         }
+
+        /// The highlight's leading edge at a visual `position`: centered on the slot,
+        /// and kept inside the pill when the highlight is wider than a slot, which a
+        /// row of many tabs in a narrow host makes it.
+        public func highlightOrigin(at position: CGFloat) -> CGFloat {
+            let lowest = inset
+            let highest = max(pill.width - inset - highlightWidth, lowest)
+            return min(max(slotCenter(at: position) - highlightWidth / 2, lowest), highest)
+        }
     }
 
     /// The layout of a bar `width` wide, with `tabCount` tabs, once the
@@ -109,29 +118,47 @@ public enum MediaTabBarMetrics {
 /// The system tab bar draws the highlight on a backdrop layer with a color matrix,
 /// `out = slope · glass + bias` for each channel, a neutral gray rather than the
 /// accent color. Measured on iOS 27.2: `1.13 · glass − 0.20` in light mode and
-/// `0.87 · glass − 0.07` in dark mode. That layer is not public, so the bar reaches
-/// the same darkening with two blend modes over the glass: a multiply by a gray,
-/// then a subtract (`plusDarker`) of a constant. A slope above one has no blend
-/// mode; light mode takes the subtraction alone, which keeps a glass value from
-/// mid-gray to white within 0.04 of the system's.
+/// `0.87 · glass − 0.07` in dark mode. That layer is not public, so the bar
+/// applies the same coefficients with blend modes over the glass: a `colorBurn`
+/// (slope above one) or a `multiply` (slope below one) by a gray, then a
+/// `plusDarker` subtraction of the rest. Only the coefficients are the system's;
+/// they depend on the color scheme alone, not on Increase Contrast or Reduce
+/// Transparency, which change the glass beneath but not the matrix applied here.
 enum MediaTabBarHighlight {
-    /// A multiply by `multiply`, then a subtraction of `subtract`, on each channel.
+    /// The system's matrix, `slope · glass − subtract`, on each channel.
     struct Darkening: Equatable {
-        var multiply: CGFloat
+        var slope: CGFloat
         var subtract: CGFloat
 
-        /// The highlight over a glass channel value in 0...1.
+        /// The gray a `colorBurn` (slope above one) or a `multiply` (below one)
+        /// uses, or `nil` when the slope is one.
+        var firstGray: CGFloat? {
+            if slope > 1 { return 1 / slope }
+            if slope < 1 { return slope }
+            return nil
+        }
+
+        /// What the `plusDarker` subtracts after the first blend: a burn by `1 / slope`
+        /// already moves white to white and subtracts `slope − 1` at black.
+        var remainder: CGFloat {
+            max(subtract - max(slope - 1, 0), 0)
+        }
+
+        /// The highlight over a glass channel value in 0...1, stage by stage as the
+        /// blend modes clamp it.
         func response(_ glass: CGFloat) -> CGFloat {
-            min(max(multiply * glass - subtract, 0), 1)
+            let g = min(max(glass, 0), 1)
+            let first: CGFloat
+            if slope > 1 {
+                first = max(1 - (1 - g) * slope, 0)
+            } else {
+                first = slope * g
+            }
+            return min(max(first - remainder, 0), 1)
         }
     }
 
-    /// The system's matrix, kept to measure ``darkening(isDark:)`` against.
-    static func system(isDark: Bool) -> (slope: CGFloat, bias: CGFloat) {
-        isDark ? (0.87, -0.07) : (1.13, -0.20)
-    }
-
     static func darkening(isDark: Bool) -> Darkening {
-        isDark ? Darkening(multiply: 0.89, subtract: 0.07) : Darkening(multiply: 1, subtract: 0.10)
+        isDark ? Darkening(slope: 0.87, subtract: 0.07) : Darkening(slope: 1.13, subtract: 0.20)
     }
 }

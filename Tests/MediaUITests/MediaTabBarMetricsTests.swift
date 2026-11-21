@@ -104,26 +104,28 @@ final class MediaTabBarMetricsTests: XCTestCase {
     }
 }
 
-/// The selected tab's highlight stays within four percent of the system bar's,
-/// which darkens the glass with a color matrix the package cannot use.
+/// The selected tab's highlight applies the system bar's color matrix with blend
+/// modes, which the package cannot use directly.
 final class MediaTabBarHighlightTests: XCTestCase {
+    private let system: [(isDark: Bool, slope: CGFloat, bias: CGFloat)] = [
+        (false, 1.13, -0.20), (true, 0.87, -0.07),
+    ]
+
+    func testTheBlendsReproduceTheSystemsMatrixOverTheGlassTheBarSitsOn() {
+        for entry in system {
+            let darkening = MediaTabBarHighlight.darkening(isDark: entry.isDark)
+            for glass in stride(from: 0.15, through: 1.0, by: 0.05) as StrideThrough<CGFloat> {
+                let expected = min(max(entry.slope * glass + entry.bias, 0), 1)
+                XCTAssertEqual(darkening.response(glass), expected, accuracy: 1e-9, "isDark \(entry.isDark) glass \(glass)")
+            }
+        }
+    }
+
     func testTheHighlightIsAlwaysDarkerThanTheGlass() {
         for isDark in [false, true] {
             let darkening = MediaTabBarHighlight.darkening(isDark: isDark)
             for glass in stride(from: 0.1, through: 1.0, by: 0.05) as StrideThrough<CGFloat> {
                 XCTAssertLessThan(darkening.response(glass), glass, "isDark \(isDark) glass \(glass)")
-            }
-        }
-    }
-
-    func testTheHighlightFollowsTheSystemsMatrixWithinFourPercent() {
-        for isDark in [false, true] {
-            let darkening = MediaTabBarHighlight.darkening(isDark: isDark)
-            let system = MediaTabBarHighlight.system(isDark: isDark)
-            // The glass values the bar sits on, from mid-gray to a white page.
-            for glass in stride(from: 0.5, through: 1.0, by: 0.05) as StrideThrough<CGFloat> {
-                let expected = min(max(system.slope * glass + system.bias, 0), 1)
-                XCTAssertEqual(darkening.response(glass), expected, accuracy: 0.04, "isDark \(isDark) glass \(glass)")
             }
         }
     }
@@ -137,8 +139,33 @@ final class MediaTabBarHighlightTests: XCTestCase {
         }
     }
 
-    func testDarkModeMultipliesAndLightModeOnlySubtracts() {
-        XCTAssertEqual(MediaTabBarHighlight.darkening(isDark: false).multiply, 1)
-        XCTAssertLessThan(MediaTabBarHighlight.darkening(isDark: true).multiply, 1)
+    func testLightModeBurnsAndDarkModeMultipliesBeforeTheSubtraction() {
+        let light = MediaTabBarHighlight.darkening(isDark: false)
+        XCTAssertEqual(light.firstGray ?? 0, 1 / 1.13, accuracy: 1e-9)
+        XCTAssertEqual(light.remainder, 0.07, accuracy: 1e-9)
+        let dark = MediaTabBarHighlight.darkening(isDark: true)
+        XCTAssertEqual(dark.firstGray ?? 0, 0.87, accuracy: 1e-9)
+        XCTAssertEqual(dark.remainder, 0.07, accuracy: 1e-9)
+        XCTAssertNil(MediaTabBarHighlight.Darkening(slope: 1, subtract: 0.1).firstGray)
+    }
+
+    func testTheHighlightStaysInsideThePillWhateverTheNumberOfTabs() {
+        for (width, count) in [(393, 4), (320, 5), (250, 5), (393, 10)] as [(CGFloat, Int)] {
+            for progress in [0, 0.5, 1] as [CGFloat] {
+                let layout = MediaTabBarMetrics.layout(width: width, tabCount: count, progress: progress)
+                for index in 0..<count {
+                    let origin = layout.highlightOrigin(at: CGFloat(index))
+                    XCTAssertGreaterThanOrEqual(origin, layout.inset - 1e-9, "\(width) \(count) \(progress) tab \(index)")
+                    XCTAssertLessThanOrEqual(origin + layout.highlightWidth, layout.pill.width - layout.inset + 1e-9, "\(width) \(count) \(progress) tab \(index)")
+                }
+            }
+        }
+    }
+
+    func testTheHighlightIsCenteredOnItsSlotWhenItFits() {
+        let layout = MediaTabBarMetrics.layout(width: 393, tabCount: 4, progress: 1)
+        for index in 0..<4 {
+            XCTAssertEqual(layout.highlightOrigin(at: CGFloat(index)) + layout.highlightWidth / 2, layout.slotCenter(at: CGFloat(index)), accuracy: 1e-9)
+        }
     }
 }
