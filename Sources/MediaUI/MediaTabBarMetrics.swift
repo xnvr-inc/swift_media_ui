@@ -76,6 +76,46 @@ public enum MediaTabBarMetrics {
         public func slotCenter(at position: CGFloat) -> CGFloat {
             inset + slotWidth * (position + 0.5)
         }
+
+        /// The highlight's leading edge at a visual `position`: centered on the slot,
+        /// and kept inside the pill when the highlight is wider than a slot, which a
+        /// row of many tabs in a narrow host makes it.
+        public func highlightOrigin(at position: CGFloat) -> CGFloat {
+            let lowest = inset
+            let highest = max(pill.width - inset - highlightWidth, lowest)
+            return min(max(slotCenter(at: position) - highlightWidth / 2, lowest), highest)
+        }
+
+        /// The highlight's frame at a visual `position`, in the pill's own space.
+        public func highlightFrame(at position: CGFloat) -> CGRect {
+            CGRect(
+                x: highlightOrigin(at: position), y: inset,
+                width: highlightWidth, height: max(pill.height - 2 * inset, 0)
+            )
+        }
+
+        /// The highlight's outline at a visual `position`, in the pill's own space: a
+        /// capsule that never leaves the pill's glass. The pill shrunk by its inset is
+        /// a capsule too, and a highlight at least as wide as it is tall, kept between
+        /// the insets, is inside it. A narrower one, in a slot of a crowded row, has
+        /// a smaller cap radius than the pill and its corners would reach past the
+        /// pill's caps, where a blend has no glass behind it; it is cut to that capsule.
+        public func highlightPath(at position: CGFloat) -> CGPath {
+            let frame = highlightFrame(at: position)
+            guard !frame.isEmpty else { return CGMutablePath() }
+            let outline = Self.capsule(frame)
+            guard frame.width < frame.height else { return outline }
+            let inner = CGRect(
+                x: inset, y: inset,
+                width: max(pill.width - 2 * inset, 0), height: max(pill.height - 2 * inset, 0)
+            )
+            return outline.intersection(Self.capsule(inner))
+        }
+
+        private static func capsule(_ rect: CGRect) -> CGPath {
+            let radius = min(rect.width, rect.height) / 2
+            return CGPath(roundedRect: rect, cornerWidth: radius, cornerHeight: radius, transform: nil)
+        }
     }
 
     /// The layout of a bar `width` wide, with `tabCount` tabs, once the
@@ -101,5 +141,59 @@ public enum MediaTabBarMetrics {
 
     private static func lerp(_ from: CGFloat, _ to: CGFloat, _ t: CGFloat) -> CGFloat {
         from + (to - from) * t
+    }
+}
+
+/// How the selected tab's highlight darkens the glass beneath it.
+///
+/// The system tab bar draws the highlight on a backdrop layer with a color matrix,
+/// `out = slope · glass + bias` on each color channel, and does not paint the
+/// accent color: the glass shows through, darker. The same scale and offset on
+/// every channel keep the glass's color, except where a channel clamps at zero.
+/// Measured on iOS 27.2: `1.13 · glass − 0.20` in light mode and
+/// `0.87 · glass − 0.07` in dark mode. That layer is not public, so the bar
+/// applies the same coefficients with
+/// blend modes over the glass: a `colorBurn` (slope above one) or a `multiply`
+/// (slope below one) by a gray, which is the same factor on every channel, then
+/// a `plusDarker` subtraction of the rest. Only the coefficients are the system's;
+/// they depend on the color scheme alone, not on Increase Contrast or Reduce
+/// Transparency, which change the glass beneath but not the matrix applied here.
+enum MediaTabBarHighlight {
+    /// The system's matrix, `slope · glass − subtract`, on each channel.
+    struct Darkening: Equatable {
+        var slope: CGFloat
+        var subtract: CGFloat
+
+        /// The gray a `colorBurn` (slope above one) or a `multiply` (below one)
+        /// uses, or `nil` when the slope is one.
+        var firstGray: CGFloat? {
+            if slope > 1 { return 1 / slope }
+            if slope < 1 { return slope }
+            return nil
+        }
+
+        /// What the `plusDarker` subtracts after the first blend. A burn by `1 / slope`
+        /// computes `slope · glass − (slope − 1)`, clamped at zero, so it already
+        /// carries `slope − 1` of the bias; a multiply carries none.
+        var remainder: CGFloat {
+            max(subtract - max(slope - 1, 0), 0)
+        }
+
+        /// The highlight over a glass channel value in 0...1, stage by stage as the
+        /// blend modes clamp it.
+        func response(_ glass: CGFloat) -> CGFloat {
+            let g = min(max(glass, 0), 1)
+            let first: CGFloat
+            if slope > 1 {
+                first = max(1 - (1 - g) * slope, 0)
+            } else {
+                first = slope * g
+            }
+            return min(max(first - remainder, 0), 1)
+        }
+    }
+
+    static func darkening(isDark: Bool) -> Darkening {
+        isDark ? Darkening(slope: 0.87, subtract: 0.07) : Darkening(slope: 1.13, subtract: 0.20)
     }
 }
