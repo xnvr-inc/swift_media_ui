@@ -148,9 +148,11 @@ public enum MediaTabBarMetrics {
 ///
 /// The system tab bar draws the highlight on a backdrop layer with a color matrix,
 /// `out = slope · glass + bias` on each color channel, and does not paint the
-/// accent color: the glass shows through, darker, and keeps its hue. Measured on
-/// iOS 27.2: `1.13 · glass − 0.20` in light mode and `0.87 · glass − 0.07` in dark
-/// mode. That layer is not public, so the bar applies the same coefficients with
+/// accent color: the glass shows through, darker. The same scale and offset on
+/// every channel keep the glass's color, except where a channel clamps at zero.
+/// Measured on iOS 27.2: `1.13 · glass − 0.20` in light mode and
+/// `0.87 · glass − 0.07` in dark mode. That layer is not public, so the bar
+/// applies the same coefficients with
 /// blend modes over the glass: a `colorBurn` (slope above one) or a `multiply`
 /// (slope below one) by a gray, which is the same factor on every channel, then
 /// a `plusDarker` subtraction of the rest. Only the coefficients are the system's;

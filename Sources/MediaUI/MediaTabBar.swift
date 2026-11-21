@@ -46,8 +46,8 @@ public extension View {
     ///
     /// The bar is drawn to look like the system's. The glass is the system's own
     /// `.regular` glass. The selected tab gets a highlight of the glass darkened
-    /// with the system bar's coefficients for light and dark mode, which keeps the
-    /// glass's color (the coefficients follow the color scheme, not Increase
+    /// with the system bar's coefficients for light and dark mode, through which
+    /// the glass shows (the coefficients follow the color scheme, not Increase
     /// Contrast or Reduce Transparency); the accent colors its icon and label; the
     /// other tabs use the label color; and an SF Symbol is drawn in its filled
     /// variant, or as it is when it has none. A template image from an asset
@@ -58,8 +58,8 @@ public extension View {
     /// modifier, as in `TabView { … }.tint(color).mediaMinimizingTabBar(…)`, does
     /// not reach the bar. With an explicit tint, the glass gave the selected
     /// icon and label the system's vibrancy in the cases measured, a red and a
-    /// blue tint on iOS 27.2: the same color as the system bar's, lighter in dark
-    /// mode. The default accent and a tint set inside a tab's page did not.
+    /// blue tint on iOS 27.2: a color within 5 of 255 per channel of the system
+    /// bar's, lighter in dark mode. The default accent and a tint set inside a tab's page did not.
     ///
     /// While the bar is shrunk, a tap on another tab selects it and expands the
     /// bar; a tap on the selected tab only expands it, so a repeat selection takes
@@ -433,7 +433,7 @@ private struct MediaTabBarPill<Tag: Hashable>: View, Animatable {
     }
 
     /// The selected tab's highlight: the glass darkened channel by channel with the
-    /// system bar's coefficients, so it keeps the glass's color, and not filled with
+    /// system bar's coefficients, so the glass shows through it, and not filled with
     /// the accent color. Its outline stays inside the pill. The blend modes act on
     /// the glass behind them, which was measured on iOS 27.2 in light and dark mode
     /// with the bar at rest and while it appears and disappears.

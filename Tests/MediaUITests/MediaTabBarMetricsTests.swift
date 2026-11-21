@@ -238,4 +238,36 @@ final class MediaTabBarHighlightTests: XCTestCase {
             XCTAssertEqual(layout.highlightPath(at: CGFloat(index)), capsule)
         }
     }
+
+    func testTheCutOutlineKeepsEverythingInsideBothCapsules() {
+        // The cut must only remove what leaves the pill: every point well inside
+        // the plain capsule and the pill shrunk by its inset stays in the outline.
+        // A regression that dropped most of the fill would pass the containment test.
+        for (width, count) in outlineCases {
+            for progress in [0, 0.5, 1] as [CGFloat] {
+                let layout = MediaTabBarMetrics.layout(width: width, tabCount: count, progress: progress)
+                let inner = CGRect(
+                    x: layout.inset, y: layout.inset,
+                    width: layout.pill.width - 2 * layout.inset, height: layout.pill.height - 2 * layout.inset
+                )
+                for position in stride(from: 0, through: CGFloat(count - 1), by: 0.5) {
+                    let frame = layout.highlightFrame(at: position)
+                    guard frame.width < frame.height else { continue }
+                    let path = layout.highlightPath(at: position)
+                    var expected = 0
+                    var lost: CGPoint?
+                    for x in stride(from: frame.minX, through: frame.maxX, by: 0.5) {
+                        for y in stride(from: frame.minY, through: frame.maxY, by: 0.5) {
+                            let point = CGPoint(x: x, y: y)
+                            guard insideCapsule(point, frame, tolerance: -0.1), insideCapsule(point, inner, tolerance: -0.1) else { continue }
+                            expected += 1
+                            if !path.contains(point), lost == nil { lost = point }
+                        }
+                    }
+                    XCTAssertGreaterThan(expected, 100, "\(width) \(count) \(progress) at \(position)")
+                    XCTAssertNil(lost, "\(width) \(count) \(progress) at \(position)")
+                }
+            }
+        }
+    }
 }
