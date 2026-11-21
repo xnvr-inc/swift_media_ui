@@ -224,6 +224,30 @@ final class MediaTabBarScrollPolicyTests: XCTestCase {
         XCTAssertEqual(changes(&policy, [0, 10, 20, 30, 40, 50, 60]), [nil, nil, .minimize, nil, .minimize, nil, .minimize])
     }
 
+    func testRestartCountsTheDownwardTravelAnewAfterAnExpansionFromOutside() {
+        var policy = MediaTabBarScrollPolicy()
+        // Shrinks at 20, then 19 more points of travel are counted.
+        XCTAssertEqual(changes(&policy, [0, 20, 39]), [nil, .minimize, nil])
+        // The bar was expanded by a tap: one more point is not another 20.
+        policy.restart()
+        XCTAssertEqual(changes(&policy, [40]), [nil])
+        XCTAssertEqual(changes(&policy, [50, 58]), [nil, nil])
+        XCTAssertEqual(changes(&policy, [59]), [.minimize])
+    }
+
+    func testWithoutARestartTheTravelBeforeATapStillCounts() {
+        var policy = MediaTabBarScrollPolicy()
+        XCTAssertEqual(changes(&policy, [0, 20, 39, 40]), [nil, .minimize, nil, .minimize])
+    }
+
+    func testRestartKeepsThePositionTheNextSampleIsComparedTo() {
+        var policy = MediaTabBarScrollPolicy()
+        _ = changes(&policy, [0, 30])
+        policy.restart()
+        // 12 points back from 30 is a reverse scroll, counted from the same position.
+        XCTAssertEqual(changes(&policy, [24, 18]), [nil, .expand])
+    }
+
     func testAShortBackAndForthDoesNotMinimize() {
         var policy = MediaTabBarScrollPolicy()
         XCTAssertEqual(changes(&policy, [0, 12, 4, 16, 8, 19]), [nil, nil, nil, nil, nil, nil])

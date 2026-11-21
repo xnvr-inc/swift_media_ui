@@ -91,7 +91,7 @@ private struct MediaSystemTabBarVisibility: ViewModifier {
     func body(content: Content) -> some View {
         content
             .toolbar(replaced ? .hidden : visibility, for: .tabBar)
-            .background(MediaTabBarReservation(height: reserved))
+            .background(MediaTabBarAnchor(height: reserved))
     }
 }
 
@@ -106,58 +106,106 @@ private extension EnvironmentValues {
     }
 }
 
+/// What the package has added to a tab controller's bottom safe area. The anchors
+/// of all its tabs share it, so a host's own inset is kept, and the room goes away
+/// again when the last anchor does.
+private final class MediaTabBarReservation {
+    nonisolated(unsafe) private static var key = 0
+
+    static func of(_ tabs: UITabBarController) -> MediaTabBarReservation {
+        if let existing = objc_getAssociatedObject(tabs, &key) as? MediaTabBarReservation { return existing }
+        let created = MediaTabBarReservation()
+        objc_setAssociatedObject(tabs, &key, created, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
+        return created
+    }
+
+    /// The anchors that are alive. A tab that is not selected keeps its anchor, so
+    /// switching tabs does not give the room up.
+    let anchors = NSHashTable<MediaTabBarAnchorView>.weakObjects()
+    /// The room the bar takes, as the latest anchor on screen reports it.
+    var height: CGFloat = 0
+    /// The part of the controller's inset that is this package's.
+    private var applied: CGFloat = 0
+    /// Whether the room has been set once, so the first setting does not animate.
+    private var hasApplied = false
+
+    func sync(_ tabs: UITabBarController) {
+        let wanted = anchors.count == 0 ? 0 : height
+        let change = wanted - applied
+        guard change != 0 else { return }
+        let animated = hasApplied && !UIAccessibility.isReduceMotionEnabled
+        hasApplied = true
+        applied = wanted
+        guard animated else {
+            tabs.additionalSafeAreaInsets.bottom += change
+            return
+        }
+        // The bar leaves and returns with the page that covers it, so the room it
+        // takes changes with the same motion.
+        UIView.animate(withDuration: 0.28) {
+            tabs.additionalSafeAreaInsets.bottom += change
+            tabs.view.layoutIfNeeded()
+        }
+    }
+}
+
+final class MediaTabBarAnchorView: UIView {
+    var height: CGFloat = 0
+    private weak var tabs: UITabBarController?
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        isUserInteractionEnabled = false
+        isHidden = true
+    }
+    required init?(coder: NSCoder) { nil }
+
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+        apply()
+    }
+
+    func apply() {
+        guard window != nil else { return }
+        var responder: UIResponder? = self
+        while let next = responder?.next {
+            if let controller = next as? UIViewController, let tabs = controller.tabBarController {
+                self.tabs = tabs
+                let reservation = MediaTabBarReservation.of(tabs)
+                reservation.anchors.add(self)
+                reservation.height = height
+                reservation.sync(tabs)
+                return
+            }
+            responder = next
+        }
+    }
+
+    /// The page that carried the anchor is gone for good.
+    func dismantle() {
+        guard let tabs else { return }
+        self.tabs = nil
+        let reservation = MediaTabBarReservation.of(tabs)
+        reservation.anchors.remove(self)
+        reservation.sync(tabs)
+    }
+}
+
 /// Makes room for the bar in the tab controller's content. The tab content lives in
 /// UIKit controllers, which do not take the bar's height from SwiftUI's safe area, so
 /// the controller's own safe area carries it, down to every page's scroll view.
-private struct MediaTabBarReservation: UIViewRepresentable {
+private struct MediaTabBarAnchor: UIViewRepresentable {
     let height: CGFloat
 
-    func makeUIView(context: Context) -> ReservationView { ReservationView() }
+    func makeUIView(context: Context) -> MediaTabBarAnchorView { MediaTabBarAnchorView() }
 
-    func updateUIView(_ view: ReservationView, context: Context) {
+    func updateUIView(_ view: MediaTabBarAnchorView, context: Context) {
         view.height = height
         view.apply()
     }
 
-    final class ReservationView: UIView {
-        var height: CGFloat = 0
-        /// Whether the room has been set once, so the first setting does not animate.
-        private var hasApplied = false
-        override init(frame: CGRect) {
-            super.init(frame: frame)
-            isUserInteractionEnabled = false
-            isHidden = true
-        }
-        required init?(coder: NSCoder) { nil }
-
-        override func didMoveToWindow() {
-            super.didMoveToWindow()
-            apply()
-        }
-
-        func apply() {
-            guard window != nil else { return }
-            var responder: UIResponder? = self
-            while let next = responder?.next {
-                if let controller = next as? UIViewController, let tabs = controller.tabBarController {
-                    let animated = hasApplied
-                    hasApplied = true
-                    guard tabs.additionalSafeAreaInsets.bottom != height else { return }
-                    guard animated else {
-                        tabs.additionalSafeAreaInsets.bottom = height
-                        return
-                    }
-                    // The bar leaves and returns with the page that covers it, so the
-                    // room it takes changes with the same motion.
-                    UIView.animate(withDuration: 0.28) {
-                        tabs.additionalSafeAreaInsets.bottom = height
-                        tabs.view.layoutIfNeeded()
-                    }
-                    return
-                }
-                responder = next
-            }
-        }
+    static func dismantleUIView(_ view: MediaTabBarAnchorView, coordinator: ()) {
+        view.dismantle()
     }
 }
 
@@ -177,11 +225,16 @@ private extension EnvironmentValues {
 @MainActor @Observable
 final class MediaTabBarController {
     private(set) var isMinimized = false
+    /// How many times the bar was expanded by something other than a page's own
+    /// scrolling: a tap, a tab change, the bar coming back. Pages count their
+    /// downward travel anew after each, as the Flutter controller does on `expand()`.
+    private(set) var manualExpansions = 0
     /// While `false`, for example under VoiceOver, the bar stays full.
     var isEnabled = true {
         didSet { if !isEnabled { isMinimized = false } }
     }
 
+    /// A page's request, from its scrolling.
     func apply(_ change: MediaTabBarChange) {
         switch change {
         case .minimize: if isEnabled { isMinimized = true }
@@ -189,7 +242,11 @@ final class MediaTabBarController {
         }
     }
 
-    func expand() { isMinimized = false }
+    /// An expansion that is not the scrolling's own.
+    func expand() {
+        isMinimized = false
+        manualExpansions += 1
+    }
 }
 
 @available(iOS 26, *)
@@ -278,8 +335,9 @@ private struct MediaTabBarView<Tag: Hashable>: View {
                 }
             }
         )
-        // The Flutter controller is linear and the curve applies to its value, so
-        // the shrink and the expansion share one deceleration.
+        // As in Flutter, the controller is linear and the curve applies to its value
+        // in both directions, so the shrink decelerates and the expansion, which
+        // runs the same curve backwards, accelerates.
         .animation(reduceMotion ? nil : .linear(duration: MediaTabBarMetrics.duration), value: isMinimized)
         .animation(reduceMotion ? nil : .snappy(duration: 0.3), value: selectedIndex)
         .allowsHitTesting(isInteractive)
@@ -374,6 +432,11 @@ private struct MediaTabBarPill<Tag: Hashable>: View, Animatable {
         .frame(width: layout.slotWidth, height: layout.pill.height)
         .contentShape(Rectangle())
         .onTapGesture { tap(index) }
+        // The system bar shows a tab's large content on a long press when the text
+        // size is large; the labels here have a fixed size.
+        .accessibilityShowsLargeContentViewer {
+            Label { Text(item.title) } icon: { icon(of: item, isSelected: isSelected) }
+        }
         .modifier(TabAccessibility(isInteractive: isInteractive, title: item.title, isSelected: isSelected) { tap(index) })
         .offset(x: layout.slotCenter(at: visual(CGFloat(index))) - layout.slotWidth / 2)
     }

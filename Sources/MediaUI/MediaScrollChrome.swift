@@ -77,6 +77,16 @@ public struct MediaTabBarScrollPolicy: Equatable {
 
     public init() {}
 
+    /// Counts the travel anew, as the Flutter controller does when the bar is
+    /// expanded from outside, for example by a tap: the next 20 points of downward
+    /// scrolling start from here, not from before the tap. The position the next
+    /// sample is compared to stays.
+    public mutating func restart() {
+        reverseTravel = 0
+        unconfirmedStep = 0
+        forwardTravel = 0
+    }
+
     /// Whether the tab bar should expand at this sample, for callers that never
     /// minimize it. See ``change(atDistance:maximumDistance:viewportHeight:isUserScrolling:)``.
     public mutating func expands(
@@ -252,6 +262,7 @@ private struct MediaScrollAwayAppBar: ViewModifier {
             .onChange(of: isEnabled && !voiceOver, initial: true) { _, scrollsAway in
                 driver.isEnabled = scrollsAway
             }
+            .onChange(of: tabBar?.manualExpansions) { driver.restartTravel() }
     }
 }
 
@@ -308,6 +319,9 @@ private final class MediaAppBarDriver {
             isUserScrolling: isUserScrolling
         )
     }
+
+    /// The bar was expanded from outside the page's scrolling.
+    func restartTravel() { expansion.restart() }
 
     func attach(_ bar: UINavigationBar?) {
         guard bar !== navigationBar else { return }

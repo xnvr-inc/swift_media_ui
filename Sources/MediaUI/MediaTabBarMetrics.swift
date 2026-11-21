@@ -32,12 +32,25 @@ public enum MediaTabBarMetrics {
     /// Height of the area the bar reserves in every state.
     public static var reservedHeight: CGFloat { barHeight + gap }
 
-    /// The Flutter `Curves.easeOutCubic` applied to the linear progress of the
-    /// transition, so the shrink and the expansion both decelerate.
+    /// The Flutter `Curves.easeOutCubic`, the cubic Bézier (0.215, 0.61, 0.355, 1),
+    /// applied to the linear progress of the transition. Flutter applies it to the
+    /// controller's value in both directions: the shrink decelerates and the
+    /// expansion, which runs it backwards, accelerates.
     public static func eased(_ linear: CGFloat) -> CGFloat {
         let t = min(max(linear, 0), 1)
-        let remaining = 1 - t
-        return 1 - remaining * remaining * remaining
+        guard t > 0, t < 1 else { return t }
+        // The same bisection as Flutter's `Cubic.transform`.
+        func bezier(_ first: CGFloat, _ second: CGFloat, _ m: CGFloat) -> CGFloat {
+            3 * first * (1 - m) * (1 - m) * m + 3 * second * (1 - m) * m * m + m * m * m
+        }
+        var start: CGFloat = 0
+        var end: CGFloat = 1
+        while true {
+            let middle = (start + end) / 2
+            let estimate = bezier(0.215, 0.355, middle)
+            if abs(t - estimate) < 0.001 { return bezier(0.61, 1, middle) }
+            if estimate < t { start = middle } else { end = middle }
+        }
     }
 
     /// Width of the shrunken pill: one slot per tab, never wider than the full pill.

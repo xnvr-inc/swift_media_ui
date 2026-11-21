@@ -16,12 +16,25 @@ final class MediaTabBarMetricsTests: XCTestCase {
         XCTAssertEqual(MediaTabBarMetrics.reservedHeight, MediaTabBarMetrics.barHeight + 8)
     }
 
-    func testTheProgressDecelerates() {
+    func testTheProgressFollowsTheFlutterEaseOutCubicCurve() {
         XCTAssertEqual(MediaTabBarMetrics.eased(0), 0)
         XCTAssertEqual(MediaTabBarMetrics.eased(1), 1)
-        XCTAssertEqual(MediaTabBarMetrics.eased(0.5), 0.875, accuracy: 1e-9)
         XCTAssertEqual(MediaTabBarMetrics.eased(-1), 0)
         XCTAssertEqual(MediaTabBarMetrics.eased(2), 1)
+        // Values of Flutter's `Curves.easeOutCubic` (the Bézier 0.215, 0.61, 0.355, 1,
+        // solved by the bisection of `Cubic.transform`, which is exact to 0.001 in x).
+        XCTAssertEqual(MediaTabBarMetrics.eased(0.25), 0.599, accuracy: 2e-3)
+        XCTAssertEqual(MediaTabBarMetrics.eased(0.5), 0.875, accuracy: 2e-3)
+        XCTAssertEqual(MediaTabBarMetrics.eased(0.75), 0.976, accuracy: 2e-3)
+    }
+
+    func testTheCurveOnlyRisesAndDecelerates() {
+        let samples = stride(from: 0.0, through: 1.0, by: 0.05).map { MediaTabBarMetrics.eased(CGFloat($0)) }
+        for (earlier, later) in zip(samples, samples.dropFirst()) {
+            XCTAssertLessThanOrEqual(earlier, later + 2e-3)
+        }
+        // It covers more in the first half than in the second.
+        XCTAssertGreaterThan(MediaTabBarMetrics.eased(0.5), 0.5 + 0.25)
     }
 
     func testTheFullPillFillsTheRowLessItsMargins() {
