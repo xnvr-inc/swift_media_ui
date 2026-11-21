@@ -45,15 +45,21 @@ public extension View {
     /// ``SwiftUI/View/mediaScrollAwayAppBar(_:)``.
     ///
     /// The bar is drawn to look like the system's. The glass is the system's own
-    /// `.regular` glass. The selected tab gets a neutral highlight of darkened glass,
-    /// with the system bar's coefficients for light and dark mode (they follow the
-    /// color scheme, not Increase Contrast or Reduce Transparency); the accent
-    /// colors its icon and label; the other tabs use the label color; and an SF
-    /// Symbol is drawn in its filled variant, or as it is when it has none.
-    /// A template image from an asset catalog is drawn as supplied. Set the accent
-    /// with an explicit `.tint(_:)` color on the `TabView` or above it: the glass
-    /// then lightens it in dark mode as it does the system bar's, while the default
-    /// accent and a tint set inside a tab's page do not.
+    /// `.regular` glass. The selected tab gets a highlight of the glass darkened
+    /// with the system bar's coefficients for light and dark mode, which keeps the
+    /// glass's color (the coefficients follow the color scheme, not Increase
+    /// Contrast or Reduce Transparency); the accent colors its icon and label; the
+    /// other tabs use the label color; and an SF Symbol is drawn in its filled
+    /// variant, or as it is when it has none. A template image from an asset
+    /// catalog is drawn as supplied.
+    ///
+    /// Set the accent with an explicit `.tint(_:)` color on the view this returns
+    /// or on one of its ancestors. A tint applied to the `TabView` before this
+    /// modifier, as in `TabView { … }.tint(color).mediaMinimizingTabBar(…)`, does
+    /// not reach the bar. With an explicit tint, the glass gave the selected
+    /// icon and label the system's vibrancy in the cases measured, a red and a
+    /// blue tint on iOS 27.2: the same color as the system bar's, lighter in dark
+    /// mode. The default accent and a tint set inside a tab's page did not.
     ///
     /// While the bar is shrunk, a tap on another tab selects it and expands the
     /// bar; a tap on the selected tab only expands it, so a repeat selection takes
@@ -367,6 +373,14 @@ private struct MediaTabBarView<Tag: Hashable>: View {
     }
 }
 
+/// A path in the pill's own space, drawn where it is rather than fitted to the
+/// space the shape is given.
+private struct HighlightOutline: Shape {
+    let path: CGPath
+
+    func path(in rect: CGRect) -> Path { Path(path) }
+}
+
 /// The pill. SwiftUI drives `progress` (linear) and `position` (the selected tab,
 /// fractional while the highlight moves) through every frame of an animation.
 @available(iOS 26, *)
@@ -418,24 +432,23 @@ private struct MediaTabBarPill<Tag: Hashable>: View, Animatable {
         .environment(\.layoutDirection, .leftToRight)
     }
 
-    /// The selected tab's highlight: the glass darkened to a neutral gray with the
-    /// system bar's coefficients, not tinted with the accent color. The blend
-    /// modes act on the glass behind them, which was measured on iOS 27.2 in light
-    /// and dark mode with the bar at rest.
+    /// The selected tab's highlight: the glass darkened channel by channel with the
+    /// system bar's coefficients, so it keeps the glass's color, and not filled with
+    /// the accent color. Its outline stays inside the pill. The blend modes act on
+    /// the glass behind them, which was measured on iOS 27.2 in light and dark mode
+    /// with the bar at rest and while it appears and disappears.
     @ViewBuilder private func highlight(layout: MediaTabBarMetrics.Layout) -> some View {
         let darkening = MediaTabBarHighlight.darkening(isDark: colorScheme == .dark)
-        let width = layout.highlightWidth
-        let height = max(layout.pill.height - 2 * layout.inset, 0)
+        let outline = HighlightOutline(path: layout.highlightPath(at: visual(position)))
         ZStack {
             if let gray = darkening.firstGray {
-                Capsule().fill(Color(white: gray)).blendMode(darkening.slope > 1 ? .colorBurn : .multiply)
+                outline.fill(Color(white: gray)).blendMode(darkening.slope > 1 ? .colorBurn : .multiply)
             }
             if darkening.remainder > 0 {
-                Capsule().fill(Color(white: 1 - darkening.remainder)).blendMode(.plusDarker)
+                outline.fill(Color(white: 1 - darkening.remainder)).blendMode(.plusDarker)
             }
         }
-        .frame(width: width, height: height)
-        .offset(x: layout.highlightOrigin(at: visual(position)), y: layout.inset)
+        .frame(width: layout.pill.width, height: layout.pill.height, alignment: .topLeading)
         .allowsHitTesting(false)
         .accessibilityHidden(true)
     }

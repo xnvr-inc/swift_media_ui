@@ -168,4 +168,74 @@ final class MediaTabBarHighlightTests: XCTestCase {
             XCTAssertEqual(layout.highlightOrigin(at: CGFloat(index)) + layout.highlightWidth / 2, layout.slotCenter(at: CGFloat(index)), accuracy: 1e-9)
         }
     }
+
+    // MARK: Outline
+
+    /// Whether `point` is inside the capsule that fills `rect`, within `tolerance`.
+    private func insideCapsule(_ point: CGPoint, _ rect: CGRect, tolerance: CGFloat = 0.05) -> Bool {
+        let radius = min(rect.width, rect.height) / 2
+        let core = rect.insetBy(dx: radius, dy: radius)
+        let dx = max(core.minX - point.x, 0, point.x - core.maxX)
+        let dy = max(core.minY - point.y, 0, point.y - core.maxY)
+        return dx * dx + dy * dy <= (radius + tolerance) * (radius + tolerance)
+    }
+
+    /// The points on a half-point grid over `path`'s bounding box that it contains.
+    private func samples(in path: CGPath) -> [CGPoint] {
+        let box = path.boundingBoxOfPath
+        guard !box.isNull, !box.isEmpty else { return [] }
+        var points: [CGPoint] = []
+        for x in stride(from: box.minX, through: box.maxX, by: 0.5) {
+            for y in stride(from: box.minY, through: box.maxY, by: 0.5) where path.contains(CGPoint(x: x, y: y)) {
+                points.append(CGPoint(x: x, y: y))
+            }
+        }
+        return points
+    }
+
+    /// Hosts of every width the bar meets, from a crowded narrow row to a roomy one.
+    private let outlineCases: [(width: CGFloat, count: Int)] = [
+        (200, 5), (250, 5), (320, 5), (393, 4), (393, 10), (150, 6),
+    ]
+
+    func testTheOutlineStaysInsideThePillsCapsuleAtEveryTabAndInBetween() {
+        for (width, count) in outlineCases {
+            for progress in [0, 0.5, 1] as [CGFloat] {
+                let layout = MediaTabBarMetrics.layout(width: width, tabCount: count, progress: progress)
+                let pill = CGRect(origin: .zero, size: layout.pill.size)
+                // A right-to-left bar shows the same positions mirrored (the last tab
+                // first), so sweeping every position covers the trailing cap as well.
+                for position in stride(from: 0, through: CGFloat(count - 1), by: 0.5) {
+                    let points = samples(in: layout.highlightPath(at: position))
+                    XCTAssertFalse(points.isEmpty, "\(width) \(count) \(progress) at \(position)")
+                    let outside = points.first { !insideCapsule($0, pill) }
+                    XCTAssertNil(outside, "\(width) \(count) \(progress) at \(position)")
+                }
+            }
+        }
+    }
+
+    func testAPlainCapsuleInANarrowSlotWouldReachPastTheCap() {
+        // The case the outline is cut for: a 200 pt host with five tabs, a 160 pt
+        // pill and a 30.4 pt slot, the highlight in the first slot.
+        let layout = MediaTabBarMetrics.layout(width: 200, tabCount: 5, progress: 0)
+        let frame = layout.highlightFrame(at: 0)
+        XCTAssertLessThan(frame.width, frame.height)
+        let radius = frame.width / 2
+        let plain = CGPath(roundedRect: frame, cornerWidth: radius, cornerHeight: radius, transform: nil)
+        let pill = CGRect(origin: .zero, size: layout.pill.size)
+        XCTAssertTrue(samples(in: plain).contains { !insideCapsule($0, pill) })
+        XCTAssertFalse(samples(in: layout.highlightPath(at: 0)).contains { !insideCapsule($0, pill) })
+    }
+
+    func testTheOutlineIsTheHighlightsCapsuleWhenItFits() {
+        let layout = MediaTabBarMetrics.layout(width: 393, tabCount: 4, progress: 1)
+        for index in 0..<4 {
+            let frame = layout.highlightFrame(at: CGFloat(index))
+            XCTAssertGreaterThanOrEqual(frame.width, frame.height)
+            let radius = frame.height / 2
+            let capsule = CGPath(roundedRect: frame, cornerWidth: radius, cornerHeight: radius, transform: nil)
+            XCTAssertEqual(layout.highlightPath(at: CGFloat(index)), capsule)
+        }
+    }
 }
