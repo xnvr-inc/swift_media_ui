@@ -103,3 +103,35 @@ public enum MediaTabBarMetrics {
         from + (to - from) * t
     }
 }
+
+/// How the selected tab's highlight darkens the glass beneath it.
+///
+/// The system tab bar draws the highlight on a backdrop layer with a color matrix,
+/// `out = slope · glass + bias` for each channel, a neutral gray rather than the
+/// accent color. Measured on iOS 27.2: `1.13 · glass − 0.20` in light mode and
+/// `0.87 · glass − 0.07` in dark mode. That layer is not public, so the bar reaches
+/// the same darkening with two blend modes over the glass: a multiply by a gray,
+/// then a subtract (`plusDarker`) of a constant. A slope above one has no blend
+/// mode; light mode takes the subtraction alone, which keeps a glass value from
+/// mid-gray to white within 0.04 of the system's.
+enum MediaTabBarHighlight {
+    /// A multiply by `multiply`, then a subtraction of `subtract`, on each channel.
+    struct Darkening: Equatable {
+        var multiply: CGFloat
+        var subtract: CGFloat
+
+        /// The highlight over a glass channel value in 0...1.
+        func response(_ glass: CGFloat) -> CGFloat {
+            min(max(multiply * glass - subtract, 0), 1)
+        }
+    }
+
+    /// The system's matrix, kept to measure ``darkening(isDark:)`` against.
+    static func system(isDark: Bool) -> (slope: CGFloat, bias: CGFloat) {
+        isDark ? (0.87, -0.07) : (1.13, -0.20)
+    }
+
+    static func darkening(isDark: Bool) -> Darkening {
+        isDark ? Darkening(multiply: 0.89, subtract: 0.07) : Darkening(multiply: 1, subtract: 0.10)
+    }
+}

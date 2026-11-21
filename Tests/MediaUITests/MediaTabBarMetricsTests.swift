@@ -103,3 +103,42 @@ final class MediaTabBarMetricsTests: XCTestCase {
         }
     }
 }
+
+/// The selected tab's highlight stays within four percent of the system bar's,
+/// which darkens the glass with a color matrix the package cannot use.
+final class MediaTabBarHighlightTests: XCTestCase {
+    func testTheHighlightIsAlwaysDarkerThanTheGlass() {
+        for isDark in [false, true] {
+            let darkening = MediaTabBarHighlight.darkening(isDark: isDark)
+            for glass in stride(from: 0.1, through: 1.0, by: 0.05) as StrideThrough<CGFloat> {
+                XCTAssertLessThan(darkening.response(glass), glass, "isDark \(isDark) glass \(glass)")
+            }
+        }
+    }
+
+    func testTheHighlightFollowsTheSystemsMatrixWithinFourPercent() {
+        for isDark in [false, true] {
+            let darkening = MediaTabBarHighlight.darkening(isDark: isDark)
+            let system = MediaTabBarHighlight.system(isDark: isDark)
+            // The glass values the bar sits on, from mid-gray to a white page.
+            for glass in stride(from: 0.5, through: 1.0, by: 0.05) as StrideThrough<CGFloat> {
+                let expected = min(max(system.slope * glass + system.bias, 0), 1)
+                XCTAssertEqual(darkening.response(glass), expected, accuracy: 0.04, "isDark \(isDark) glass \(glass)")
+            }
+        }
+    }
+
+    func testBlackStaysBlackAndTheResponseNeverLeavesTheRange() {
+        for isDark in [false, true] {
+            let darkening = MediaTabBarHighlight.darkening(isDark: isDark)
+            XCTAssertEqual(darkening.response(0), 0)
+            XCTAssertEqual(darkening.response(-1), 0)
+            XCTAssertLessThanOrEqual(darkening.response(2), 1)
+        }
+    }
+
+    func testDarkModeMultipliesAndLightModeOnlySubtracts() {
+        XCTAssertEqual(MediaTabBarHighlight.darkening(isDark: false).multiply, 1)
+        XCTAssertLessThan(MediaTabBarHighlight.darkening(isDark: true).multiply, 1)
+    }
+}

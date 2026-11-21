@@ -16,7 +16,7 @@ public struct MediaTabBarItem<Tag: Hashable>: Identifiable {
     let icon: Icon
     public var id: Tag { tag }
 
-    /// A tab drawn with an SF Symbol, which takes its filled variant while selected.
+    /// A tab drawn with an SF Symbol, which is drawn in its filled variant, as the system bar does.
     public init(tag: Tag, title: String, systemImage: String) {
         self.tag = tag
         self.title = title
@@ -42,6 +42,12 @@ public extension View {
     /// ``SwiftUI/View/mediaSystemTabBar(_:)`` in place of its own tab bar
     /// visibility, and have each tab's root page report its scrolling through
     /// ``SwiftUI/View/mediaScrollAwayAppBar(_:)``.
+    ///
+    /// The bar looks like the system's: the glass follows the system's transparency,
+    /// the selected tab is a darkened glass highlight with the accent on its icon
+    /// and label, every symbol is drawn filled, and the other tabs use the primary
+    /// label color. Set the accent with an explicit `.tint(_:)` color; the glass
+    /// then lightens it in dark mode as it does the system bar's.
     ///
     /// While the bar is shrunk, a tap on another tab selects it and expands the
     /// bar; a tap on the selected tab only expands it, so a repeat selection takes
@@ -367,6 +373,8 @@ private struct MediaTabBarPill<Tag: Hashable>: View, Animatable {
     let isInteractive: Bool
     let tap: (Int) -> Void
 
+    @Environment(\.colorScheme) private var colorScheme
+
     private static var labelHeight: CGFloat { 12 }
     private static var labelTopPadding: CGFloat { 2 }
 
@@ -387,10 +395,7 @@ private struct MediaTabBarPill<Tag: Hashable>: View, Animatable {
                 progress: MediaTabBarMetrics.eased(progress)
             )
             ZStack(alignment: .topLeading) {
-                Capsule()
-                    .fill(.tint.opacity(0.22))
-                    .frame(width: layout.highlightWidth, height: max(layout.pill.height - 2 * layout.inset, 0))
-                    .offset(x: layout.slotCenter(at: visual(position)) - layout.highlightWidth / 2, y: layout.inset)
+                highlight(layout: layout)
                 ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
                     tab(item, at: index, layout: layout)
                 }
@@ -407,12 +412,32 @@ private struct MediaTabBarPill<Tag: Hashable>: View, Animatable {
         .environment(\.layoutDirection, .leftToRight)
     }
 
+    /// The selected tab's highlight: the glass darkened to a neutral gray, as the
+    /// system bar does, not tinted with the accent color. Blend modes within the
+    /// pill act on the glass behind them.
+    @ViewBuilder private func highlight(layout: MediaTabBarMetrics.Layout) -> some View {
+        let darkening = MediaTabBarHighlight.darkening(isDark: colorScheme == .dark)
+        let width = layout.highlightWidth
+        let height = max(layout.pill.height - 2 * layout.inset, 0)
+        let x = layout.slotCenter(at: visual(position)) - width / 2
+        ZStack {
+            if darkening.multiply < 1 {
+                Capsule().fill(Color(white: darkening.multiply)).blendMode(.multiply)
+            }
+            Capsule().fill(Color(white: 1 - darkening.subtract)).blendMode(.plusDarker)
+        }
+        .frame(width: width, height: height)
+        .offset(x: x, y: layout.inset)
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+
     @ViewBuilder private func icon(of item: MediaTabBarItem<Tag>, isSelected: Bool) -> some View {
         switch item.icon {
         case .symbol(let name):
             Image(systemName: name)
                 .resizable()
-                .symbolVariant(isSelected ? .fill : .none)
+                .symbolVariant(.fill)
                 .scaledToFit()
                 .frame(width: MediaTabBarMetrics.iconSize, height: MediaTabBarMetrics.iconSize)
         case .asset(let name, let bundle):
@@ -431,7 +456,7 @@ private struct MediaTabBarPill<Tag: Hashable>: View, Animatable {
         return VStack(spacing: 0) {
             icon(of: item, isSelected: isSelected)
             Text(item.title)
-                .font(.system(size: 10, weight: .medium))
+                .font(.system(size: 10, weight: isSelected ? .semibold : .medium))
                 .lineLimit(1)
                 .fixedSize()
                 .padding(.top, Self.labelTopPadding)
@@ -439,7 +464,7 @@ private struct MediaTabBarPill<Tag: Hashable>: View, Animatable {
                 .frame(height: (Self.labelTopPadding + Self.labelHeight) * layout.labelFade, alignment: .top)
                 .clipped()
         }
-        .foregroundStyle(isSelected ? AnyShapeStyle(TintShapeStyle()) : AnyShapeStyle(HierarchicalShapeStyle.secondary))
+        .foregroundStyle(isSelected ? AnyShapeStyle(TintShapeStyle()) : AnyShapeStyle(HierarchicalShapeStyle.primary))
         .frame(width: layout.slotWidth, height: layout.pill.height)
         .contentShape(Rectangle())
         .onTapGesture { tap(index) }
