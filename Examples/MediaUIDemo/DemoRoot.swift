@@ -104,10 +104,19 @@ struct DemoRoot: View {
         TabView(selection: $selection) {
             ForEach(mode.tabs) { tab in
                 stack(tab)
+                    #if os(iOS)
+                    .mediaSystemTabBar(.visible)
+                    #endif
                     .tabItem { Label(tab.title, systemImage: tab.symbol) }
                     .tag(tab)
             }
         }
+        #if os(iOS)
+        .mediaMinimizingTabBar(
+            mode.tabs.map { MediaTabBarItem(tag: $0, title: $0.title, systemImage: $0.symbol) },
+            selection: $selection
+        )
+        #endif
     }
 
     private func stack(_ tab: DemoTab) -> some View {
@@ -116,6 +125,7 @@ struct DemoRoot: View {
                 .navigationTitle(tab.title)
                 #if os(iOS)
                 .navigationBarTitleDisplayMode(.inline)
+                .mediaScrollAwayAppBar()
                 #endif
                 .toolbar {
                     #if os(iOS)
