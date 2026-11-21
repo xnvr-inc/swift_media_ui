@@ -247,7 +247,7 @@ private struct MediaScrollAwayAppBar: ViewModifier {
                     viewportHeight: geometry.containerSize.height
                 )
             } action: { _, sample in
-                let change = driver.scrolled(to: sample)
+                let change = driver.scrolled(to: sample, expansions: tabBar?.manualExpansions ?? 0)
                 guard let change else { return }
                 // The app bar and the tab bar shrink together: a page that keeps
                 // its app bar, for example during a search, keeps its tab bar too.
@@ -262,7 +262,6 @@ private struct MediaScrollAwayAppBar: ViewModifier {
             .onChange(of: isEnabled && !voiceOver, initial: true) { _, scrollsAway in
                 driver.isEnabled = scrollsAway
             }
-            .onChange(of: tabBar?.manualExpansions) { driver.restartTravel() }
     }
 }
 
@@ -304,8 +303,18 @@ private final class MediaAppBarDriver {
         didSet { if isEnabled != oldValue { apply() } }
     }
 
+    /// How many expansions from outside the page's scrolling the page has counted.
+    private var expansionsSeen = 0
+
     /// Takes the page's new scroll sample. Returns what the tab bar should do.
-    func scrolled(to sample: MediaScrollSample) -> MediaTabBarChange? {
+    /// `expansions` is the tab bar's count of expansions that were not a page's own
+    /// scrolling, such as a tap. Checking it with the sample, not in a separate
+    /// callback, counts the travel anew from the very next movement after the tap.
+    func scrolled(to sample: MediaScrollSample, expansions: Int) -> MediaTabBarChange? {
+        if expansions != expansionsSeen {
+            expansionsSeen = expansions
+            expansion.restart()
+        }
         // Rubber-banding above the top must not push the bar down.
         let next = max(sample.distance, 0)
         if next != distance {
@@ -319,9 +328,6 @@ private final class MediaAppBarDriver {
             isUserScrolling: isUserScrolling
         )
     }
-
-    /// The bar was expanded from outside the page's scrolling.
-    func restartTravel() { expansion.restart() }
 
     func attach(_ bar: UINavigationBar?) {
         guard bar !== navigationBar else { return }

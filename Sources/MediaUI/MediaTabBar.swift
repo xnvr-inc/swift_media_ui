@@ -130,6 +130,11 @@ private final class MediaTabBarReservation {
     private var hasApplied = false
 
     func sync(_ tabs: UITabBarController) {
+        // A host that replaced the inset with a value smaller than the room added
+        // here has taken that room with it: what remains is the host's, and the room
+        // is added again if it is still wanted. A replacement that is not smaller
+        // cannot be told from the host adding to the inset, and keeps the room.
+        if tabs.additionalSafeAreaInsets.bottom < applied { applied = 0 }
         let wanted = anchors.count == 0 ? 0 : height
         let change = wanted - applied
         guard change != 0 else { return }
@@ -170,6 +175,12 @@ final class MediaTabBarAnchorView: UIView {
         var responder: UIResponder? = self
         while let next = responder?.next {
             if let controller = next as? UIViewController, let tabs = controller.tabBarController {
+                // An anchor that moved to another controller leaves the first one.
+                if let previous = self.tabs, previous !== tabs {
+                    let old = MediaTabBarReservation.of(previous)
+                    old.anchors.remove(self)
+                    old.sync(previous)
+                }
                 self.tabs = tabs
                 let reservation = MediaTabBarReservation.of(tabs)
                 reservation.anchors.add(self)
