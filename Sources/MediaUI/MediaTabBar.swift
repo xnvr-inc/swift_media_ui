@@ -268,6 +268,7 @@ private struct MediaTabBarView<Tag: Hashable>: View {
             position: CGFloat(selectedIndex),
             isRightToLeft: layoutDirection == .rightToLeft,
             selectedIndex: selectedIndex,
+            isInteractive: isInteractive,
             tap: { index in
                 if index != selectedIndex { selection = items[index].tag }
                 if isMinimized {
@@ -282,7 +283,6 @@ private struct MediaTabBarView<Tag: Hashable>: View {
         .animation(reduceMotion ? nil : .linear(duration: MediaTabBarMetrics.duration), value: isMinimized)
         .animation(reduceMotion ? nil : .snappy(duration: 0.3), value: selectedIndex)
         .allowsHitTesting(isInteractive)
-        .accessibilityHidden(!isInteractive)
     }
 }
 
@@ -295,6 +295,7 @@ private struct MediaTabBarPill<Tag: Hashable>: View, Animatable {
     var position: CGFloat
     let isRightToLeft: Bool
     let selectedIndex: Int
+    let isInteractive: Bool
     let tap: (Int) -> Void
 
     private static var labelHeight: CGFloat { 12 }
@@ -330,6 +331,9 @@ private struct MediaTabBarPill<Tag: Hashable>: View, Animatable {
             .accessibilityAddTraits(.isTabBar)
             .accessibilityElement(children: .contain)
             .accessibilityIdentifier("media.tabBar")
+            // Hidden here rather than outside the pill: a tab's replacement button
+            // stays exposed when only an ancestor is hidden.
+            .accessibilityHidden(!isInteractive)
             .offset(x: layout.pill.minX, y: layout.pill.minY)
         }
         .frame(height: MediaTabBarMetrics.reservedHeight)
@@ -377,6 +381,7 @@ private struct MediaTabBarPill<Tag: Hashable>: View, Animatable {
         .accessibilityRepresentation {
             Button(item.title) { tap(index) }
                 .accessibilityAddTraits(isSelected ? .isSelected : [])
+                .accessibilityHidden(!isInteractive)
         }
         .offset(x: layout.slotCenter(at: visual(CGFloat(index))) - layout.slotWidth / 2)
     }
