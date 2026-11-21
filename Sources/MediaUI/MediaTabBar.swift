@@ -331,9 +331,6 @@ private struct MediaTabBarPill<Tag: Hashable>: View, Animatable {
             .accessibilityAddTraits(.isTabBar)
             .accessibilityElement(children: .contain)
             .accessibilityIdentifier("media.tabBar")
-            // Hidden here rather than outside the pill: a tab's replacement button
-            // stays exposed when only an ancestor is hidden.
-            .accessibilityHidden(!isInteractive)
             .offset(x: layout.pill.minX, y: layout.pill.minY)
         }
         .frame(height: MediaTabBarMetrics.reservedHeight)
@@ -377,13 +374,32 @@ private struct MediaTabBarPill<Tag: Hashable>: View, Animatable {
         .frame(width: layout.slotWidth, height: layout.pill.height)
         .contentShape(Rectangle())
         .onTapGesture { tap(index) }
-        // One button per tab, whatever the icon and label are made of.
-        .accessibilityRepresentation {
-            Button(item.title) { tap(index) }
-                .accessibilityAddTraits(isSelected ? .isSelected : [])
-                .accessibilityHidden(!isInteractive)
-        }
+        .modifier(TabAccessibility(isInteractive: isInteractive, title: item.title, isSelected: isSelected) { tap(index) })
         .offset(x: layout.slotCenter(at: visual(CGFloat(index))) - layout.slotWidth / 2)
+    }
+}
+
+/// One button per tab, whatever the icon and label are made of. While the bar is
+/// not interactive the tab is hidden instead. Hiding an ancestor leaves the
+/// replacement button exposed, and flipping a hidden flag on the button or the
+/// container back and forth left the tabs stuck as unreachable after a screen
+/// had covered the bar and gone again, so the node is replaced, not toggled.
+@available(iOS 26, *)
+private struct TabAccessibility: ViewModifier {
+    let isInteractive: Bool
+    let title: String
+    let isSelected: Bool
+    let tap: () -> Void
+
+    @ViewBuilder func body(content: Content) -> some View {
+        if isInteractive {
+            content.accessibilityRepresentation {
+                Button(title, action: tap)
+                    .accessibilityAddTraits(isSelected ? .isSelected : [])
+            }
+        } else {
+            content.accessibilityHidden(true)
+        }
     }
 }
 #endif
