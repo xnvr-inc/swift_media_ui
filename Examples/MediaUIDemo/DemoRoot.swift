@@ -104,12 +104,18 @@ struct DemoRoot: View {
         TabView(selection: $selection) {
             ForEach(mode.tabs) { tab in
                 stack(tab)
+                    #if os(iOS)
+                    .mediaSystemTabBar(.visible)
+                    #endif
                     .tabItem { Label(tab.title, systemImage: tab.symbol) }
                     .tag(tab)
             }
         }
         #if os(iOS)
-        .mediaMinimizingTabBar()
+        .mediaMinimizingTabBar(
+            mode.tabs.map { MediaTabBarItem(tag: $0, title: $0.title, systemImage: $0.symbol) },
+            selection: $selection
+        )
         #endif
     }
 

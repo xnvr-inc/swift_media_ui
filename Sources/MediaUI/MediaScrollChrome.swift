@@ -39,14 +39,25 @@ public enum MediaScrollAwayAppBarMetrics {
     }
 }
 
-/// When a minimized tab bar should expand again, as a page scrolls.
+/// What a scrolling page asks of the tab bar.
+public enum MediaTabBarChange: Equatable {
+    /// Shrink to the compact pill.
+    case minimize
+    /// Return to the full bar.
+    case expand
+}
+
+/// When the tab bar shrinks and expands again, as a page scrolls.
 ///
 /// Mirrors the Flutter tab bar policy (`GlassTabBarMinimizeController`): the bar
-/// shrinks while scrolling down and expands on a reverse scroll, when the page
-/// is back at its top and when the page stops being scrollable. Only the user's
-/// own scrolling counts as a reverse scroll; rubber-banding at the far edge,
-/// jumps and content changes do not.
-public struct MediaTabBarExpansionPolicy: Equatable {
+/// shrinks after 20 points of downward scrolling and expands on a reverse
+/// scroll, when the page is back at its top and when the page stops being
+/// scrollable. Only the user's own scrolling counts; rubber-banding at the far
+/// edge, jumps and content changes do not.
+public struct MediaTabBarScrollPolicy: Equatable {
+    /// Downward travel since the last reversal that counts as the intent to
+    /// minimize, the Flutter `kMinimizeThreshold`.
+    public static let minimizeDistance: CGFloat = 20
     /// Upward travel since the last reversal that counts as a deliberate reverse
     /// scroll, the Flutter `kExpandThreshold`.
     public static let reverseDistance: CGFloat = 12
@@ -58,15 +69,32 @@ public struct MediaTabBarExpansionPolicy: Equatable {
 
     private var last: CGFloat = 0
     private var reverseTravel: CGFloat = 0
+    private var forwardTravel: CGFloat = 0
+    private var unconfirmedStep: CGFloat = 0
     private var expandedForReverse = false
     private var wasScrollable = false
     private var lastRaw: CGFloat = 0
 
     public init() {}
 
-    /// Feeds the page's scroll `distance` from its resting top and returns
-    /// whether the tab bar should expand now. It asks once per reverse scroll,
-    /// once on arriving at the top and once when the page stops scrolling.
+    /// Whether the tab bar should expand at this sample, for callers that never
+    /// minimize it. See ``change(atDistance:maximumDistance:viewportHeight:isUserScrolling:)``.
+    public mutating func expands(
+        atDistance rawDistance: CGFloat,
+        maximumDistance: CGFloat = .greatestFiniteMagnitude,
+        viewportHeight: CGFloat = .greatestFiniteMagnitude,
+        isUserScrolling: Bool = true
+    ) -> Bool {
+        change(
+            atDistance: rawDistance, maximumDistance: maximumDistance,
+            viewportHeight: viewportHeight, isUserScrolling: isUserScrolling
+        ) == .expand
+    }
+
+    /// Feeds the page's scroll `distance` from its resting top and returns what
+    /// the tab bar should do now, if anything. It asks to expand once per
+    /// reverse scroll, once on arriving at the top and once when the page stops
+    /// scrolling, and to minimize each time 20 points of downward travel add up.
     ///
     /// - Parameters:
     ///   - maximumDistance: The farthest the page can scroll. A distance beyond
@@ -76,14 +104,14 @@ public struct MediaTabBarExpansionPolicy: Equatable {
     ///   - viewportHeight: A change larger than half of it is a jump, such as a
     ///     restored position, not a scroll.
     ///   - isUserScrolling: Whether the user's finger or its momentum moves the
-    ///     page. Programmatic movement never counts as a reverse scroll, but
-    ///     reaching the top always expands.
-    public mutating func expands(
+    ///     page. Programmatic movement never counts as scrolling, but reaching
+    ///     the top always expands.
+    public mutating func change(
         atDistance rawDistance: CGFloat,
         maximumDistance: CGFloat = .greatestFiniteMagnitude,
         viewportHeight: CGFloat = .greatestFiniteMagnitude,
         isUserScrolling: Bool = true
-    ) -> Bool {
+    ) -> MediaTabBarChange? {
         let maximum = max(maximumDistance, 0)
         let distance = min(max(rawDistance, 0), maximum)
         let scrollable = maximum >= Self.minimumScrollableDistance
@@ -96,15 +124,19 @@ public struct MediaTabBarExpansionPolicy: Equatable {
         // reverse and top rules below still apply to a short page afterwards.
         if wasScrollable && !scrollable {
             reverseTravel = 0
+            unconfirmedStep = 0
+            forwardTravel = 0
             expandedForReverse = true
-            return true
+            return .expand
         }
         let atTop = distance <= Self.topTolerance
         if atTop {
             reverseTravel = 0
-            guard last > Self.topTolerance else { return false }
+            unconfirmedStep = 0
+            forwardTravel = 0
+            guard last > Self.topTolerance else { return nil }
             expandedForReverse = true
-            return true
+            return .expand
         }
         // Pushed further past the far edge the user is still moving down, so the
         // next reverse scroll is a new one. A position beyond a range that shrank
@@ -120,18 +152,37 @@ public struct MediaTabBarExpansionPolicy: Equatable {
               abs(distance - last) <= viewportHeight * 0.5
         else {
             reverseTravel = 0
-            return false
+            unconfirmedStep = 0
+            forwardTravel = 0
+            return nil
         }
         if distance > last {
             reverseTravel = 0
+            unconfirmedStep = 0
             expandedForReverse = false
-            return false
+            // A page too short to scroll never gives the bar up: it would shrink
+            // to reveal nothing.
+            guard scrollable else { return nil }
+            forwardTravel += distance - last
+            guard forwardTravel >= Self.minimizeDistance else { return nil }
+            forwardTravel = 0
+            return .minimize
         }
-        guard distance < last else { return false }
-        reverseTravel += last - distance
-        guard reverseTravel >= Self.reverseDistance, !expandedForReverse else { return false }
+        guard distance < last else { return nil }
+        forwardTravel = 0
+        let step = last - distance
+        // A first step back that is already a whole reverse scroll waits for the
+        // next sample. A finger turning round keeps moving, but a page correcting
+        // its own offset, for example as a lazy row's height settles, moves once.
+        if reverseTravel == 0, unconfirmedStep == 0, step >= Self.reverseDistance {
+            unconfirmedStep = step
+            return nil
+        }
+        reverseTravel += unconfirmedStep + step
+        unconfirmedStep = 0
+        guard reverseTravel >= Self.reverseDistance, !expandedForReverse else { return nil }
         expandedForReverse = true
-        return true
+        return .expand
     }
 }
 
@@ -140,28 +191,13 @@ import Observation
 import UIKit
 
 public extension View {
-    /// Shrinks the tab bar to its compact form while the page scrolls down, so
-    /// content gets the room. It expands again on reverse scroll, at the top of
-    /// the page, after 12 points of the user's own reverse scroll, and when it is
-    /// tapped. That tap only expands the bar and does not
-    /// select a tab, so a repeat selection of the current tab needs a second tap.
-    /// VoiceOver keeps the full bar. Apply it to the `TabView`; pages report their
-    /// scrolling through `mediaScrollAwayAppBar(_:)`. Earlier systems keep the
-    /// standard tab bar.
-    @ViewBuilder func mediaMinimizingTabBar() -> some View {
-        if #available(iOS 26, *) {
-            modifier(MediaMinimizingTabBar())
-        } else {
-            self
-        }
-    }
-
     /// Lets the app bar leave with the content like the Flutter page header: it
     /// follows the page's own scrolling, dissolves within the first 40 points and
     /// returns only as the page returns to its top. The page's content inset stays
     /// fixed. Apply it to a tab's root page, inside its `NavigationStack`, where
     /// it follows the page's primary vertical scroll view (the first one the page
-    /// reports). The page also tells a `mediaMinimizingTabBar()` when to expand.
+    /// reports). The page also tells a `mediaMinimizingTabBar(_:selection:)` when
+    /// to shrink and when to expand.
     /// While `isEnabled` is `false`, for example during a search, or while
     /// VoiceOver is running, the app bar stays. Earlier systems keep the standard bar.
     @ViewBuilder func mediaScrollAwayAppBar(_ isEnabled: Bool = true) -> some View {
@@ -170,56 +206,6 @@ public extension View {
         } else {
             self
         }
-    }
-}
-
-/// Lets a page ask the tab bar to expand. The system minimizes the bar while
-/// scrolling down, but offers no way to expand it from code; holding the
-/// behavior at `.never` for a moment does that.
-@available(iOS 26, *)
-@MainActor @Observable
-private final class MediaTabBarMinimizer {
-    /// Long enough for the system to take the expansion, short enough that a
-    /// scroll down right after it still shrinks the bar.
-    private static let hold: Duration = .milliseconds(250)
-
-    private(set) var behavior: TabBarMinimizeBehavior = .onScrollDown
-    @ObservationIgnored private var isHolding = false
-
-    func expand() {
-        guard !isHolding else { return }
-        isHolding = true
-        behavior = .never
-        Task { [weak self] in
-            try? await Task.sleep(for: Self.hold)
-            self?.behavior = .onScrollDown
-            self?.isHolding = false
-        }
-    }
-}
-
-@available(iOS 26, *)
-private struct MediaTabBarMinimizerKey: EnvironmentKey {
-    static let defaultValue: MediaTabBarMinimizer? = nil
-}
-
-@available(iOS 26, *)
-private extension EnvironmentValues {
-    var mediaTabBarMinimizer: MediaTabBarMinimizer? {
-        get { self[MediaTabBarMinimizerKey.self] }
-        set { self[MediaTabBarMinimizerKey.self] = newValue }
-    }
-}
-
-@available(iOS 26, *)
-private struct MediaMinimizingTabBar: ViewModifier {
-    @Environment(\.accessibilityVoiceOverEnabled) private var voiceOver
-    @State private var minimizer = MediaTabBarMinimizer()
-
-    func body(content: Content) -> some View {
-        content
-            .tabBarMinimizeBehavior(voiceOver ? .never : minimizer.behavior)
-            .environment(\.mediaTabBarMinimizer, minimizer)
     }
 }
 
@@ -235,24 +221,28 @@ private struct MediaScrollSample: Equatable {
 private struct MediaScrollAwayAppBar: ViewModifier {
     let isEnabled: Bool
     @Environment(\.accessibilityVoiceOverEnabled) private var voiceOver
-    @Environment(\.mediaTabBarMinimizer) private var minimizer
+    @Environment(\.mediaTabBarController) private var tabBar
     @State private var driver = MediaAppBarDriver()
 
     func body(content: Content) -> some View {
         content
             .background(MediaAppBarAnchor(driver: driver))
             .onScrollGeometryChange(for: MediaScrollSample.self) { geometry in
+                // The container is the scroll view less its insets, and the distance
+                // is counted from the resting top, which is already inset: the
+                // farthest it goes is the content less the container.
                 MediaScrollSample(
                     distance: geometry.contentOffset.y + geometry.contentInsets.top,
-                    maximumDistance: max(
-                        geometry.contentSize.height + geometry.contentInsets.bottom
-                            + geometry.contentInsets.top - geometry.containerSize.height,
-                        0
-                    ),
+                    maximumDistance: max(geometry.contentSize.height - geometry.containerSize.height, 0),
                     viewportHeight: geometry.containerSize.height
                 )
             } action: { _, sample in
-                if driver.scrolled(to: sample) { minimizer?.expand() }
+                let change = driver.scrolled(to: sample)
+                guard let change else { return }
+                // The app bar and the tab bar shrink together: a page that keeps
+                // its app bar, for example during a search, keeps its tab bar too.
+                if change == .minimize && !(isEnabled && !voiceOver) { return }
+                tabBar?.apply(change)
             }
             .onScrollPhaseChange { _, phase in
                 // `.tracking` is a finger resting on the page before it moves, and
@@ -285,7 +275,7 @@ private final class MediaAppBarDriver {
 
     weak var navigationBar: UINavigationBar?
     private var distance: CGFloat = 0
-    private var expansion = MediaTabBarExpansionPolicy()
+    private var expansion = MediaTabBarScrollPolicy()
     /// Whether the page owns the bar. The navigation bar is shared with the
     /// pages pushed over this one, so a page that is off screen, or still being
     /// revealed by a transition, never writes to it.
@@ -303,15 +293,15 @@ private final class MediaAppBarDriver {
         didSet { if isEnabled != oldValue { apply() } }
     }
 
-    /// Takes the page's new scroll sample. Returns whether the tab bar should expand.
-    func scrolled(to sample: MediaScrollSample) -> Bool {
+    /// Takes the page's new scroll sample. Returns what the tab bar should do.
+    func scrolled(to sample: MediaScrollSample) -> MediaTabBarChange? {
         // Rubber-banding above the top must not push the bar down.
         let next = max(sample.distance, 0)
         if next != distance {
             distance = next
             apply()
         }
-        return expansion.expands(
+        return expansion.change(
             atDistance: sample.distance,
             maximumDistance: sample.maximumDistance,
             viewportHeight: sample.viewportHeight,

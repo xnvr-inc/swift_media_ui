@@ -1,0 +1,92 @@
+import CoreGraphics
+import Foundation
+
+/// Geometry and motion of the compact tab bar.
+///
+/// Mirrors the Flutter `XnvrFlutterTabBar` without an accessory: a glass pill that
+/// fills the row less its margins, and shrinks to a pill of icons while the page
+/// scrolls down. Labels leave first, the pill narrows to one slot per tab and
+/// settles in the middle, and the height scales down. The bar reserves the same
+/// height in every state, so the content's clearance never jumps.
+public enum MediaTabBarMetrics {
+    /// Duration of the shrink and of the expansion, the Flutter `_duration`.
+    public static let duration: TimeInterval = 0.38
+    /// Height of the full pill, the standard iOS 26 tab bar.
+    public static let barHeight: CGFloat = 62
+    /// Space between the pill and the bottom of the area the bar reserves.
+    public static let gap: CGFloat = 8
+    /// Space at each side of the full pill.
+    public static let margin: CGFloat = 20
+    /// Height of the shrunken pill relative to the full one.
+    public static let compactScale: CGFloat = 0.76
+    /// Width of one tab in the shrunken pill.
+    public static let compactSlot: CGFloat = 56
+    /// Space between the shrunken pill's edge and its first and last tab.
+    public static let compactInset: CGFloat = 6
+    /// Space between the full pill's edge and its first and last tab.
+    public static let expandedInset: CGFloat = 4
+    /// Share of the progress over which the labels leave.
+    public static let labelFadeSpan: CGFloat = 0.65
+    /// Size of the box a tab's icon fits, in every state, the Flutter icon theme size.
+    public static let iconSize: CGFloat = 24
+    /// Height of the area the bar reserves in every state.
+    public static var reservedHeight: CGFloat { barHeight + gap }
+
+    /// The Flutter `Curves.easeOutCubic` applied to the linear progress of the
+    /// transition, so the shrink and the expansion both decelerate.
+    public static func eased(_ linear: CGFloat) -> CGFloat {
+        let t = min(max(linear, 0), 1)
+        let remaining = 1 - t
+        return 1 - remaining * remaining * remaining
+    }
+
+    /// Width of the shrunken pill: one slot per tab, never wider than the full pill.
+    public static func compactWidth(tabCount: Int, expandedWidth: CGFloat) -> CGFloat {
+        min(CGFloat(max(tabCount, 0)) * compactSlot + 2 * compactInset, max(expandedWidth, 0))
+    }
+
+    /// Where the pill and its tabs are for a bar `width` wide.
+    public struct Layout: Equatable {
+        /// The pill, in a space `width` wide and ``MediaTabBarMetrics/reservedHeight`` high.
+        public var pill: CGRect
+        /// Space between the pill's edge and its first and last tab.
+        public var inset: CGFloat
+        /// Width of one tab's slot.
+        public var slotWidth: CGFloat
+        /// Width of the highlight behind the selected tab.
+        public var highlightWidth: CGFloat
+        /// Opacity, and share of its height, that a tab's label keeps.
+        public var labelFade: CGFloat
+
+        /// The middle of the slot at a visual `position`, counted from the leading
+        /// edge and fractional while the highlight moves, in the pill's own space.
+        public func slotCenter(at position: CGFloat) -> CGFloat {
+            inset + slotWidth * (position + 0.5)
+        }
+    }
+
+    /// The layout of a bar `width` wide, with `tabCount` tabs, once the
+    /// transition has reached the eased `progress` (0 expanded, 1 shrunken).
+    public static func layout(width: CGFloat, tabCount: Int, progress: CGFloat) -> Layout {
+        let p = min(max(progress, 0), 1)
+        let count = CGFloat(max(tabCount, 1))
+        let expandedWidth = max(width - 2 * margin, 0)
+        let compact = compactWidth(tabCount: tabCount, expandedWidth: expandedWidth)
+        let pillWidth = lerp(expandedWidth, compact, p)
+        let pillHeight = barHeight * lerp(1, compactScale, p)
+        let pillLeft = lerp(margin, (width - compact) / 2, p)
+        let inset = lerp(expandedInset, compactInset, p)
+        let highlight = lerp((expandedWidth - 2 * expandedInset) / count, compactSlot, p)
+        return Layout(
+            pill: CGRect(x: pillLeft, y: reservedHeight - gap - pillHeight, width: pillWidth, height: pillHeight),
+            inset: inset,
+            slotWidth: (pillWidth - 2 * inset) / count,
+            highlightWidth: min(max(highlight, 0), max(pillWidth - 2 * inset, 0)),
+            labelFade: 1 - min(1, p / labelFadeSpan)
+        )
+    }
+
+    private static func lerp(_ from: CGFloat, _ to: CGFloat, _ t: CGFloat) -> CGFloat {
+        from + (to - from) * t
+    }
+}
