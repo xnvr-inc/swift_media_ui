@@ -204,7 +204,9 @@ public extension View {
     /// Lets the app bar leave with the content like the Flutter page header: it
     /// follows the page's own scrolling, dissolves within the first 40 points and
     /// returns only as the page returns to its top. The page's content inset stays
-    /// fixed. Apply it to a tab's root page, inside its `NavigationStack`, where
+    /// fixed: once the bar is gone it is hidden and its height is added to the
+    /// page's safe area, so the system scroll edge effect is sized from the status
+    /// bar and not from the hidden bar. Apply it to a tab's root page, inside its `NavigationStack`, where
     /// it follows the page's primary vertical scroll view (the first one the page
     /// reports). The page also tells a `mediaMinimizingTabBar(_:selection:)` when
     /// to shrink and when to expand.
@@ -221,7 +223,7 @@ public extension View {
 
 /// What the page reports about its scrolling, in points from its resting top.
 @available(iOS 26, *)
-private struct MediaScrollSample: Equatable {
+struct MediaScrollSample: Equatable {
     var distance: CGFloat
     var maximumDistance: CGFloat
     var viewportHeight: CGFloat
@@ -269,7 +271,7 @@ private struct MediaScrollAwayAppBar: ViewModifier {
 /// It lives outside SwiftUI state so a scroll frame never re-evaluates the page.
 @available(iOS 26, *)
 @MainActor
-private final class MediaAppBarDriver {
+final class MediaAppBarDriver {
     /// What a view looked like before this driver changed it.
     private final class Original {
         let alpha: CGFloat
@@ -284,6 +286,15 @@ private final class MediaAppBarDriver {
     }
 
     weak var navigationBar: UINavigationBar?
+    /// The page, the navigation controller's child, whose safe area the bar feeds.
+    weak var page: UIViewController?
+    /// The bar this driver has hidden, and the page and amount by which it has
+    /// added to the safe area in its place. A bar that is hidden still feeds the
+    /// system scroll edge effect its own height, which is how far below the top
+    /// the effect's blur would reach; the safe area stays so the page does not move.
+    private weak var hiddenBar: UINavigationBar?
+    private weak var compensatedPage: UIViewController?
+    private var compensation: CGFloat = 0
     private var distance: CGFloat = 0
     private var expansion = MediaTabBarScrollPolicy()
     /// Whether the page owns the bar. The navigation bar is shared with the
@@ -409,6 +420,35 @@ private final class MediaAppBarDriver {
             item.isUserInteractionEnabled = original.isUserInteractionEnabled
         }
         touched.removeAllObjects()
+        uncover()
+    }
+
+    /// Hides the bar once its content is gone, and adds its height to the page's
+    /// safe area so the content stays where it is. The system scroll edge effect
+    /// is as tall as the bar's bottom edge plus its feather; with the bar hidden
+    /// it ends at the status bar's inset, like the blur under a status bar.
+    private func cover(_ bar: UINavigationBar, height: CGFloat) {
+        guard let page, height > 0 else { return }
+        if hiddenBar == nil {
+            // A bar that something else hides is not this driver's to show again.
+            guard !bar.isHidden else { return }
+            hiddenBar = bar
+            bar.isHidden = true
+        }
+        guard compensatedPage !== page || compensation != height else { return }
+        compensatedPage?.additionalSafeAreaInsets.top -= compensation
+        page.additionalSafeAreaInsets.top += height
+        compensatedPage = page
+        compensation = height
+    }
+
+    /// Shows the bar again and takes back the safe area that stood in for it.
+    private func uncover() {
+        hiddenBar?.isHidden = false
+        hiddenBar = nil
+        compensatedPage?.additionalSafeAreaInsets.top -= compensation
+        compensatedPage = nil
+        compensation = 0
     }
 
     func apply() {
@@ -430,6 +470,7 @@ private final class MediaAppBarDriver {
             item.alpha = MediaScrollAwayAppBarMetrics.opacity(forShift: shift)
             item.isUserInteractionEnabled = !gone
         }
+        if gone { cover(navigationBar, height: height) } else { uncover() }
     }
 }
 
@@ -451,14 +492,25 @@ private struct MediaAppBarAnchor: UIViewControllerRepresentable {
 
         @available(*, unavailable) required init?(coder: NSCoder) { fatalError() }
 
+        /// The controller the navigation controller shows, which owns the safe area
+        /// that the page's scroll view reads.
+        private var page: UIViewController? {
+            guard let navigationController else { return nil }
+            var page: UIViewController = self
+            while let parent = page.parent, parent !== navigationController { page = parent }
+            return page.parent === navigationController ? page : nil
+        }
+
         override func viewDidLayoutSubviews() {
             super.viewDidLayoutSubviews()
+            driver.page = page
             driver.attach(navigationController?.navigationBar)
         }
 
         override func viewWillAppear(_ animated: Bool) {
             super.viewWillAppear(animated)
             let driver = driver
+            driver.page = page
             let bar = navigationController?.navigationBar
             guard let coordinator = transitionCoordinator else { return driver.appeared(in: bar) }
             // The bar still shows the page that is leaving, so it only dissolves
@@ -477,6 +529,7 @@ private struct MediaAppBarAnchor: UIViewControllerRepresentable {
 
         override func viewDidAppear(_ animated: Bool) {
             super.viewDidAppear(animated)
+            driver.page = page
             driver.appeared(in: navigationController?.navigationBar)
         }
 
