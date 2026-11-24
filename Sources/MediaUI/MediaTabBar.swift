@@ -42,7 +42,8 @@ public extension View {
     /// Apply it to the `TabView`, give each tab's content
     /// ``SwiftUI/View/mediaSystemTabBar(_:)`` in place of its own tab bar
     /// visibility, and have each tab's root page report its scrolling through
-    /// ``SwiftUI/View/mediaScrollAwayAppBar(_:)``.
+    /// ``SwiftUI/View/mediaScrollAwayAppBar(_:)`` or
+    /// ``SwiftUI/View/mediaTabBarFollowsScroll(_:)`` for pinned top controls.
     ///
     /// The bar is drawn to look like the system's. The glass is the system's own
     /// `.regular` glass. The selected tab gets a highlight of the glass darkened
