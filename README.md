@@ -154,6 +154,10 @@ to compose a custom player or browsing UI.
 The module also includes volume presets, media cards, badges, discussion views,
 portrait paging, and Apple TV side panels.
 
+Use `mediaTabBarFollowsScroll()` on a tab's root page to keep controls such as a
+search field pinned while the compact tab bar responds to scrolling. Pass
+`false` when that page is inactive.
+
 ## Codex skill
 
 Copy [skills/swift-media-ui](skills/swift-media-ui) into your Codex skills

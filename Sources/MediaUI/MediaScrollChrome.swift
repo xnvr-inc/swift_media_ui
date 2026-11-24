@@ -214,7 +214,18 @@ public extension View {
     /// VoiceOver is running, the app bar stays. Earlier systems keep the standard bar.
     @ViewBuilder func mediaScrollAwayAppBar(_ isEnabled: Bool = true) -> some View {
         if #available(iOS 26, *) {
-            modifier(MediaScrollAwayAppBar(isEnabled: isEnabled))
+            modifier(MediaScrollChrome(isEnabled: isEnabled, scrollsAppBar: true))
+        } else {
+            self
+        }
+    }
+
+    /// Shrinks and expands the compact `mediaMinimizingTabBar` as the page scrolls.
+    /// Use this on the primary scroll view or its root page when its top controls
+    /// stay pinned. Set `isEnabled` to `false` while the page is inactive.
+    @ViewBuilder func mediaTabBarFollowsScroll(_ isEnabled: Bool = true) -> some View {
+        if #available(iOS 26, *) {
+            modifier(MediaScrollChrome(isEnabled: isEnabled, scrollsAppBar: false))
         } else {
             self
         }
@@ -230,15 +241,18 @@ struct MediaScrollSample: Equatable {
 }
 
 @available(iOS 26, *)
-private struct MediaScrollAwayAppBar: ViewModifier {
+private struct MediaScrollChrome: ViewModifier {
     let isEnabled: Bool
+    let scrollsAppBar: Bool
     @Environment(\.accessibilityVoiceOverEnabled) private var voiceOver
     @Environment(\.mediaTabBarController) private var tabBar
     @State private var driver = MediaAppBarDriver()
 
     func body(content: Content) -> some View {
         content
-            .background(MediaAppBarAnchor(driver: driver))
+            .background {
+                if scrollsAppBar { MediaAppBarAnchor(driver: driver) }
+            }
             .onScrollGeometryChange(for: MediaScrollSample.self) { geometry in
                 // The container is the scroll view less its insets, and the distance
                 // is counted from the resting top, which is already inset: the
@@ -250,9 +264,7 @@ private struct MediaScrollAwayAppBar: ViewModifier {
                 )
             } action: { _, sample in
                 let change = driver.scrolled(to: sample, expansions: tabBar?.manualExpansions ?? 0)
-                guard let change else { return }
-                // The app bar and the tab bar shrink together: a page that keeps
-                // its app bar, for example during a search, keeps its tab bar too.
+                guard let change, scrollsAppBar || isEnabled else { return }
                 if change == .minimize && !(isEnabled && !voiceOver) { return }
                 tabBar?.apply(change)
             }
@@ -261,7 +273,7 @@ private struct MediaScrollAwayAppBar: ViewModifier {
                 // `.animating` is the app scrolling it: neither is the user scrolling.
                 driver.isUserScrolling = phase == .interacting || phase == .decelerating
             }
-            .onChange(of: isEnabled && !voiceOver, initial: true) { _, scrollsAway in
+            .onChange(of: scrollsAppBar && isEnabled && !voiceOver, initial: true) { _, scrollsAway in
                 driver.isEnabled = scrollsAway
             }
     }
@@ -330,7 +342,7 @@ final class MediaAppBarDriver {
         let next = max(sample.distance, 0)
         if next != distance {
             distance = next
-            apply()
+            if navigationBar != nil { apply() }
         }
         return expansion.change(
             atDistance: sample.distance,
